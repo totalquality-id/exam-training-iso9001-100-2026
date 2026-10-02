@@ -23,14 +23,34 @@
   </div></header>
 
   <main class="wrap wide" id="vList">
-    <div class="stats" id="stats"></div>
-    <div class="bar">
-      <input type="search" id="qs" placeholder="Cari nama atau jabatan…">
-      <select id="fs"><option value="all">Semua status</option><option value="in_progress">Mengerjakan</option><option value="submitted">Menunggu penilaian</option><option value="graded">Selesai dinilai</option></select>
-      <div class="sp"></div><span class="mut small" id="upd"></span>
-      <button class="btn ghost sm" id="bRef">Refresh</button><button class="btn sm" id="bXls">Ekspor Excel</button>
-    </div>
-    <div class="tw"><table><thead><tr><th>Peserta</th><th>Status</th><th>Progres</th><th>Mulai</th><th>Aktivitas terakhir</th><th>Durasi</th><th>Nilai</th></tr></thead><tbody id="tb"></tbody></table></div>
+    <nav class="navtabs">
+      <button class="ntab on" data-p="list">Peserta</button><button class="ntab" data-p="batch">Batch</button>
+      <div class="sp"></div><span class="mut small" id="upd"></span>&nbsp;<button class="btn ghost sm" id="bRef">Refresh</button>
+    </nav>
+
+    <section id="pgList">
+      <div class="stats" id="stats"></div>
+      <div class="bar">
+        <input type="search" id="qs" placeholder="Cari nama atau jabatan…">
+        <select id="fb"><option value="all">Semua batch</option></select>
+        <select id="fs"><option value="all">Semua status</option><option value="in_progress">Mengerjakan</option><option value="submitted">Menunggu penilaian</option><option value="graded">Selesai dinilai</option></select>
+        <div class="sp"></div><button class="btn sm" id="bXls">Ekspor Excel</button>
+      </div>
+      <div class="tw"><table><thead><tr><th>Peserta</th><th>Status</th><th>Progres</th><th>Mulai</th><th>Aktivitas terakhir</th><th>Durasi</th><th>Nilai</th></tr></thead><tbody id="tb"></tbody></table></div>
+    </section>
+
+    <section id="pgBatch" hidden>
+      <div class="card" style="margin:24px 0">
+        <h2>Buat Batch Baru</h2><p class="mut small" style="margin:4px 0 16px">Satu batch untuk satu Copart. Kode 6 angka dibuat otomatis dan dibagikan ke peserta.</p>
+        <div class="frow">
+          <div><label class="f" for="bnName">Nama Copart</label><input id="bnName" type="text" maxlength="120" placeholder="Contoh: PT Sinar Jaya Abadi"></div>
+          <div><label class="f" for="bnNote">Keterangan (opsional)</label><input id="bnNote" type="text" maxlength="200" placeholder="Contoh: Angkatan 1 · 14 Oktober"></div>
+          <button class="btn" id="bnAdd">Buat Batch</button>
+        </div>
+        <div class="err" id="bnErr"></div><div id="bnOk"></div>
+      </div>
+      <div class="tw"><table><thead><tr><th>Copart</th><th>Kode</th><th>Status</th><th>Peserta</th><th>Dibuat</th><th></th></tr></thead><tbody id="bt"></tbody></table></div>
+    </section>
   </main>
 
   <main class="wrap wide" id="vDet" hidden></main>

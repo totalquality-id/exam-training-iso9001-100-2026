@@ -1,162 +1,75 @@
-<!doctype html>
-<html lang="id">
-  <head>
-    <meta charset="utf-8" />
-    <meta name="viewport" content="width=device-width,initial-scale=1" />
-    <title>Final Assessment ISO 9001:2026</title>
-    <link rel="preconnect" href="https://fonts.googleapis.com" />
-    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-    <link
-      href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap"
-      rel="stylesheet"
-    />
-    <link rel="icon" href="assets/logo.png" />
-    <link rel="stylesheet" href="assets/style.css" />
-  </head>
-  <body>
-    <div id="vFatal" class="view wrap center" hidden>
-      <h2 id="fatalTitle">Konfigurasi belum lengkap</h2>
-      <p class="mut" id="fatalMsg"></p>
-      <button class="btn" id="bReload" hidden onclick="location.reload()">
-        Muat ulang
-      </button>
+<!DOCTYPE html>
+<html lang="id"><head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Final Assessment ISO 9001:2026</title>
+<link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+<link rel="icon" href="assets/logo.png">
+<link rel="stylesheet" href="assets/style.css">
+</head><body>
+<div id="vFatal" class="view wrap center" hidden><h2 id="fatalTitle">Konfigurasi belum lengkap</h2><p class="mut" id="fatalMsg"></p><button class="btn" id="bReload" hidden onclick="location.reload()">Muat ulang</button></div>
+
+<main id="vStart" class="view wrap wide" hidden>
+  <div class="split">
+    <section class="lead">
+      <div class="brand"><img class="logo-img" src="assets/logo.png" alt="Logo" onerror="this.outerHTML='<div class=logo>QMS</div>'"></div>
+      <h1 id="sTitle"></h1><p class="sub" id="sSub"></p>
+      <div class="meta"><div><b id="mQ"></b><span>Total soal</span></div><div><b id="mT"></b><span>Menit</span></div><div><b>100</b><span>Total nilai</span></div></div>
+      <ul class="struct">
+        <li><i>A</i><div><b>Multiple Choice</b><span>25 soal · 50 poin</span></div></li>
+        <li><i>B</i><div><b>True / False + Reasoning</b><span>5 soal · 10 poin</span></div></li>
+        <li><i>C</i><div><b>Case Analysis</b><span>5 kasus · 20 poin</span></div></li>
+        <li><i>D</i><div><b>Integrated Transition Case</b><span>1 kasus terpadu · 20 poin</span></div></li>
+      </ul>
+    </section>
+    <div>
+    <form id="fCode" class="card formcard">
+      <h2>Masukkan Kode Batch</h2><p class="mut small" style="margin:4px 0 18px">Kode 6 angka dari trainer Anda.</p>
+      <input id="code" class="codein" type="text" inputmode="numeric" autocomplete="off" placeholder="000000" required>
+      <div class="err" id="cErr"></div>
+      <button class="btn block" id="bCode" type="submit">Lanjut</button>
+    </form>
+    <form id="fStart" class="card formcard" hidden>
+      <h2>Data Peserta</h2><p class="mut small" style="margin:4px 0 0">Isi data berikut untuk memulai ujian.</p>
+      <label class="f" for="name">Nama lengkap</label><input id="name" type="text" required minlength="2" maxlength="120" autocomplete="name" placeholder="Nama sesuai identitas">
+      <label class="f" for="job">Jabatan</label><input id="job" type="text" required minlength="2" maxlength="120" placeholder="Contoh: QMS Manager">
+      <label class="f" for="copart">Copart</label><input id="copart" type="text" disabled>
+      <div class="note"><span>ⓘ</span><span>Waktu berjalan sejak tombol ditekan dan tidak dapat dijeda. Jawaban tersimpan otomatis; jika halaman tertutup atau koneksi terputus, buka kembali tautan ini di perangkat yang sama untuk melanjutkan.</span></div>
+      <div class="err" id="sErr"></div>
+      <button class="btn block" id="bStart" type="submit">Mulai Ujian</button>
+      <p style="text-align:center;margin:14px 0 0"><a href="#" id="bChange" class="small" style="color:var(--brand)">Ganti kode batch</a></p>
+    </form>
     </div>
+  </div>
+</main>
 
-    <main id="vStart" class="view wrap wide" hidden>
-      <div class="split">
-        <section class="lead">
-          <div class="brand">
-            <img
-              class="logo-img"
-              src="assets/logo.png"
-              alt="Logo"
-              onerror="this.outerHTML = '<div class=logo>QMS</div>'"
-            />
-          </div>
-          <h1 id="sTitle"></h1>
-          <p class="sub" id="sSub"></p>
-          <div class="meta">
-            <div><b id="mQ"></b><span>Total soal</span></div>
-            <div><b id="mT"></b><span>Menit</span></div>
-            <div><b>100</b><span>Total nilai</span></div>
-          </div>
-        </section>
-        <form id="fStart" class="card formcard">
-          <h2>Data Peserta</h2>
-          <p class="mut small" style="margin: 4px 0 0">
-            Isi data berikut untuk memulai ujian.
-          </p>
-          <label class="f" for="name">Nama lengkap</label
-          ><input
-            id="name"
-            type="text"
-            required
-            minlength="2"
-            maxlength="120"
-            autocomplete="name"
-            placeholder="Nama sesuai identitas"
-          />
-          <label class="f" for="job">Jabatan</label
-          ><input
-            id="job"
-            type="text"
-            required
-            minlength="2"
-            maxlength="120"
-            placeholder="Contoh: QMS Manager"
-          />
-          <div class="note">
-            <span>ⓘ</span
-            ><span
-              >Waktu berjalan sejak tombol ditekan dan tidak dapat dijeda.
-              Jawaban tersimpan otomatis; jika halaman tertutup atau koneksi
-              terputus, buka kembali tautan ini di perangkat yang sama untuk
-              melanjutkan.</span
-            >
-          </div>
-          <div class="err" id="sErr"></div>
-          <button class="btn block" id="bStart" type="submit">
-            Mulai Ujian
-          </button>
-        </form>
-      </div>
-    </main>
+<div id="vExam" class="view" hidden>
+  <header class="top"><div class="in">
+    <div class="brand"><img class="logo-img" src="assets/logo.png" alt="Logo" onerror="this.outerHTML='<div class=logo>QMS</div>'"><span class="small mut" id="who"></span></div><div class="sp"></div>
+    <div class="prog"><span><b id="pCount">0</b> / <span id="pTotal"></span> terjawab · <em id="saveSt">—</em></span><div class="pbar"><i id="pBar" style="width:0"></i></div></div>
+    <div class="timer" id="timer">--:--</div>
+  </div>
+  <nav class="subnav">
+    <a class="pill" href="#secA" data-s="A">A · Pilihan Ganda <em></em></a><a class="pill" href="#secB" data-s="B">B · Benar/Salah <em></em></a>
+    <a class="pill" href="#secC" data-s="C">C · Studi Kasus <em></em></a><a class="pill" href="#secD" data-s="D">D · Kasus Terpadu <em></em></a>
+  </nav>
+  <div class="net" id="net" hidden>Tidak ada koneksi — Anda tetap dapat mengisi. Jawaban tersimpan di perangkat ini dan akan tersinkron otomatis saat tersambung kembali.</div></header>
+  <main class="wrap" id="exam"></main>
+</div>
 
-    <div id="vExam" class="view" hidden>
-      <header class="top">
-        <div class="in">
-          <div class="brand">
-            <img
-              class="logo-img"
-              src="assets/logo.png"
-              alt="Logo"
-              onerror="this.outerHTML = '<div class=logo>QMS</div>'"
-            /><span class="small mut" id="who"></span>
-          </div>
-          <div class="sp"></div>
-          <div class="prog">
-            <span
-              ><b id="pCount">0</b> / <span id="pTotal"></span> terjawab ·
-              <em id="saveSt">—</em></span
-            >
-            <div class="pbar"><i id="pBar" style="width: 0"></i></div>
-          </div>
-          <div class="timer" id="timer">--:--</div>
-        </div>
-        <nav class="subnav">
-          <a class="pill" href="#secA" data-s="A">A · Pilihan Ganda <em></em></a
-          ><a class="pill" href="#secB" data-s="B">B · Benar/Salah <em></em></a>
-          <a class="pill" href="#secC" data-s="C">C · Studi Kasus <em></em></a
-          ><a class="pill" href="#secD" data-s="D"
-            >D · Kasus Terpadu <em></em
-          ></a>
-        </nav>
-        <div class="net" id="net" hidden>
-          Tidak ada koneksi — Anda tetap dapat mengisi. Jawaban tersimpan di
-          perangkat ini dan akan tersinkron otomatis saat tersambung kembali.
-        </div>
-      </header>
-      <main class="wrap" id="exam"></main>
-    </div>
+<main id="vDone" class="view wrap center" hidden>
+  <div class="okc">✓</div><h1>Jawaban Terkirim</h1>
+  <p class="mut" style="margin-top:12px">Terima kasih. Jawaban Anda telah diterima dan akan dinilai oleh trainer.<br>Anda dapat menutup halaman ini.</p>
+</main>
 
-    <main id="vDone" class="view wrap center" hidden>
-      <div class="okc">✓</div>
-      <h1>Jawaban Terkirim</h1>
-      <p class="mut" style="margin-top: 12px">
-        Terima kasih. Jawaban Anda telah diterima dan akan dinilai oleh
-        trainer.<br />Anda dapat menutup halaman ini.
-      </p>
-    </main>
+<div class="modal" id="mConfirm" hidden><div class="card">
+  <h2>Kirim jawaban?</h2>
+  <p class="mut" id="mInfo" style="margin:8px 0 0"></p>
+  <label class="ck" id="ckRow"><input type="checkbox" id="ck"><span>Saya menyatakan bahwa jawaban evaluasi ini merupakan hasil pemahaman dan analisis saya sendiri.</span></label>
+  <div class="err" id="mErr"></div>
+  <div id="mBtns" style="display:flex;gap:10px;justify-content:flex-end;margin-top:8px"><button class="btn ghost" id="mNo">Kembali</button><button class="btn" id="mYes" disabled>Kirim Final</button></div>
+</div></div>
 
-    <div class="modal" id="mConfirm" hidden>
-      <div class="card">
-        <h2>Kirim jawaban?</h2>
-        <p class="mut" id="mInfo" style="margin: 8px 0 0"></p>
-        <label class="ck" id="ckRow"
-          ><input type="checkbox" id="ck" /><span
-            >Saya menyatakan bahwa jawaban evaluasi ini merupakan hasil
-            pemahaman dan analisis saya sendiri.</span
-          ></label
-        >
-        <div class="err" id="mErr"></div>
-        <div
-          id="mBtns"
-          style="
-            display: flex;
-            gap: 10px;
-            justify-content: flex-end;
-            margin-top: 8px;
-          "
-        >
-          <button class="btn ghost" id="mNo">Kembali</button
-          ><button class="btn" id="mYes" disabled>Kirim Final</button>
-        </div>
-      </div>
-    </div>
-
-    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.js"></script>
-    <script src="assets/config.js"></script>
-    <script src="assets/questions.js"></script>
-    <script src="assets/participant.js"></script>
-  </body>
-</html>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.js"></script>
+<script src="assets/config.js"></script><script src="assets/questions.js"></script><script src="assets/participant.js"></script>
+</body></html>

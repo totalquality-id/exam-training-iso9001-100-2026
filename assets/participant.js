@@ -11,11 +11,11 @@ const setSt = t => $("#saveSt").textContent = t;
 // ---- cache lokal: salinan jawaban di perangkat, aman dari refresh & putus koneksi ----
 const readCache = () => { try { return JSON.parse(localStorage.getItem(CK)); } catch { return null; } };
 const writeCache = () => { try {
-  localStorage.setItem(CK, JSON.stringify({ attempt: { id: attempt.id, user_id: attempt.user_id, name: attempt.name, job_title: attempt.job_title, started_at: attempt.started_at }, answers: ans, dirty, pending, done }));
+  localStorage.setItem(CK, JSON.stringify({ attempt: { id: attempt.id, user_id: attempt.user_id, name: attempt.name, job_title: attempt.job_title, copart: attempt.copart, batch_id: attempt.batch_id, started_at: attempt.started_at }, answers: ans, dirty, pending, done }));
 } catch {} };
 
 async function init() {
-  $("#sTitle").textContent = E.title; $("#sSub").textContent = E.subtitle;
+  $("#sTitle").textContent = E.title; $("#sSub").textContent = E.training;
   $("#mQ").textContent = E.total; $("#mT").textContent = E.minutes; $("#pTotal").textContent = E.total;
   if (!CFG.SUPABASE_URL || CFG.SUPABASE_URL.startsWith("GANTI")) return fatal("Isi SUPABASE_URL dan SUPABASE_ANON_KEY pada assets/config.js.");
   if ("serviceWorker" in navigator) navigator.serviceWorker.register("sw.js").catch(() => {});
@@ -32,7 +32,28 @@ async function init() {
     if (error) return fatal("Tidak dapat terhubung ke server. Jawaban Anda aman; periksa koneksi lalu muat ulang halaman ini.", "Koneksi terputus", true);
     if (data && data[0]) { attempt = data[0]; if (attempt.status !== "in_progress") { done = true; writeCache(); return view("vDone"); } startExam(attempt.answers); writeCache(); return; }
   }
-  view("vStart");
+  view("vStart"); showCode();
+  const k = new URLSearchParams(location.search).get("kode");
+  if (k) { $("#code").value = k.replace(/\D/g, "").slice(0, 6); lookup(k); }
+}
+
+let batch = null;
+function showCode() { batch = null; $("#sSub").textContent = E.training; $("#fCode").hidden = false; $("#fStart").hidden = true; }
+$("#code").addEventListener("input", e => e.target.value = e.target.value.replace(/\D/g, "").slice(0, 6));
+$("#fCode").addEventListener("submit", e => { e.preventDefault(); lookup($("#code").value); });
+$("#bChange").onclick = e => { e.preventDefault(); showCode(); $("#code").select(); };
+async function lookup(raw) {
+  const code = String(raw || "").replace(/\D/g, ""); $("#cErr").textContent = "";
+  if (code.length !== 6) return $("#cErr").textContent = "Kode batch terdiri dari 6 angka.";
+  $("#bCode").disabled = true;
+  const { data, error } = await sb.rpc("get_batch", { p_code: code });
+  $("#bCode").disabled = false;
+  if (error) return $("#cErr").textContent = "Tidak dapat memeriksa kode. Periksa koneksi lalu coba lagi.";
+  if (!data || !data.length) return $("#cErr").textContent = "Kode batch tidak ditemukan. Periksa kembali kode dari trainer.";
+  if (!data[0].is_open) return $("#cErr").textContent = "Batch ini sudah ditutup. Hubungi trainer Anda.";
+  batch = { code, copart: data[0].copart };
+  $("#sSub").textContent = E.training + " — " + batch.copart; $("#copart").value = batch.copart;
+  $("#fCode").hidden = true; $("#fStart").hidden = false; $("#name").focus();
 }
 
 $("#fStart").addEventListener("submit", async e => {
@@ -40,15 +61,15 @@ $("#fStart").addEventListener("submit", async e => {
   try {
     const { data: { session } } = await sb.auth.getSession();
     if (!session) { const { error } = await sb.auth.signInAnonymously(); if (error) throw error; }
-    const { data, error } = await sb.from("attempts").insert({ name: $("#name").value.trim(), job_title: $("#job").value.trim() }).select().single();
+    const { data, error } = await sb.rpc("join_batch", { p_code: batch.code, p_name: $("#name").value.trim(), p_job: $("#job").value.trim() });
     if (error) throw error;
     attempt = data; startExam({}); writeCache();
-  } catch (err) { $("#sErr").textContent = "Gagal memulai (periksa koneksi): " + (err.message || err); $("#bStart").disabled = false; }
+  } catch (err) { $("#sErr").textContent = "Gagal memulai: " + (err.message || err); $("#bStart").disabled = false; }
 });
 
 function startExam(saved) {
   ans = Object.assign({ mc: {}, tf: {}, tfr: {}, txt: {} }, saved || {});
-  $("#who").textContent = attempt.name + " · " + attempt.job_title;
+  $("#who").textContent = attempt.name + " · " + attempt.job_title + (attempt.copart ? " · " + attempt.copart : "");
   render(); restore(); progress(); view("vExam"); net();
   const end = new Date(attempt.started_at).getTime() + E.minutes * 60000;
   const t = () => {

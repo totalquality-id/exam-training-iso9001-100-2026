@@ -2,6 +2,7 @@
 window.EXAM = {
   title: "Final Assessment",
   subtitle: "ISO 9001:2026 — Understanding Requirements, Implementation & Transition",
+  training: "Training ISO 9001:2026",
   minutes: 75,
   mc: [
     [1,"Tujuan utama sistem manajemen mutu adalah:",["Menghasilkan sebanyak mungkin documented information","Mendapatkan sertifikat ISO","Meningkatkan kemampuan organisasi menyediakan produk/jasa yang memenuhi persyaratan serta meningkatkan kepuasan pelanggan","Menghilangkan seluruh risiko"]],

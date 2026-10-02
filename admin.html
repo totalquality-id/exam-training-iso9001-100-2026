@@ -1,0 +1,42 @@
+<!DOCTYPE html>
+<html lang="id"><head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Admin — Final Assessment ISO 9001:2026</title>
+<link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+<link rel="icon" href="assets/logo.png">
+<link rel="stylesheet" href="assets/style.css">
+</head><body>
+<main id="vLogin" class="view login card" hidden>
+  <div class="brand"><img class="logo-img" src="assets/logo.png" alt="Logo" onerror="this.outerHTML='<div class=logo>QMS</div>'"><span>Trainer Console</span></div>
+  <form id="fLogin">
+    <label class="f" for="em">Email</label><input id="em" type="email" required autocomplete="username">
+    <label class="f" for="pw">Password</label><input id="pw" type="password" required autocomplete="current-password">
+    <div class="err" id="lErr"></div><button class="btn block" type="submit">Masuk</button>
+  </form>
+</main>
+
+<div id="vApp" class="view" hidden>
+  <header class="top"><div class="in">
+    <div class="brand"><img class="logo-img" src="assets/logo.png" alt="Logo" onerror="this.outerHTML='<div class=logo>QMS</div>'"><span>Trainer Console</span></div><div class="sp"></div>
+    <span class="mut small" id="me"></span><button class="btn ghost sm" id="bOut">Keluar</button>
+  </div></header>
+
+  <main class="wrap wide" id="vList">
+    <div class="stats" id="stats"></div>
+    <div class="bar">
+      <input type="search" id="qs" placeholder="Cari nama atau jabatan…">
+      <select id="fs"><option value="all">Semua status</option><option value="in_progress">Mengerjakan</option><option value="submitted">Menunggu penilaian</option><option value="graded">Selesai dinilai</option></select>
+      <div class="sp"></div><span class="mut small" id="upd"></span>
+      <button class="btn ghost sm" id="bRef">Refresh</button><button class="btn sm" id="bXls">Ekspor Excel</button>
+    </div>
+    <div class="tw"><table><thead><tr><th>Peserta</th><th>Status</th><th>Progres</th><th>Mulai</th><th>Aktivitas terakhir</th><th>Durasi</th><th>Nilai</th></tr></thead><tbody id="tb"></tbody></table></div>
+  </main>
+
+  <main class="wrap wide" id="vDet" hidden></main>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/exceljs/4.4.0/exceljs.min.js"></script>
+<script src="assets/config.js"></script><script src="assets/questions.js"></script><script src="assets/admin.js"></script>
+</body></html>

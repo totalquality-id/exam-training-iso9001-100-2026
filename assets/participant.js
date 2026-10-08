@@ -68,7 +68,10 @@ $("#fStart").addEventListener("submit", async e => {
 });
 
 function startExam(saved) {
-  ans = Object.assign({ mc: {}, tf: {}, tfr: {}, txt: {} }, saved || {});
+  // Jawaban dari versi soal lama (format berbeda) tidak dipakai agar tidak tercampur dengan kunci yang baru
+  const same = !!saved && saved.v === E.version;
+  ans = { v: E.version, mc: same ? Object.assign({}, saved.mc) : {} };
+  if (saved && !same && Object.keys(saved).length) dirty = true;
   $("#who").textContent = attempt.name + " · " + attempt.job_title + (attempt.copart ? " · " + attempt.copart : "");
   render(); restore(); progress(); view("vExam"); net();
   const end = new Date(attempt.started_at).getTime() + E.minutes * 60000;
@@ -88,7 +91,8 @@ async function syncFromServer() {
   if (error || !data) return;
   if (data.status !== "in_progress") return finish();
   let added = false;
-  for (const k of ["mc", "tf", "tfr", "txt"]) for (const [n, v] of Object.entries((data.answers || {})[k] || {})) if (!(n in ans[k])) { ans[k][n] = v; added = true; }
+  if ((data.answers || {}).v !== E.version) return;
+  for (const [n, v] of Object.entries(data.answers.mc || {})) if (!(n in ans.mc)) { ans.mc[n] = v; added = true; }
   if (added) { restore(); progress(); dirty = true; writeCache(); }
 }
 async function flush() {
@@ -122,60 +126,43 @@ document.addEventListener("visibilitychange", () => { if (!document.hidden && an
 
 // ---- tampilan soal ----
 function render() {
-  let h = `<section class="sec" id="secA"><div class="sec-h"><span class="tag">Section A</span><h2>Multiple Choice</h2><p>Pilih satu jawaban paling tepat. (50 poin)</p></div>`;
-  E.mc.forEach(([n, q, o]) => {
-    h += `<div class="q"><div class="qt"><b>${n}.</b> ${esc(q)}</div><div class="opts">${o.map((t, i) =>
-      `<label class="opt"><input type="radio" name="mc${n}" data-k="mc" data-n="${n}" value="${L[i]}"><span class="k">${L[i]}</span><span>${esc(t)}</span></label>`).join("")}</div></div>`;
+  let h = "", pills = "";
+  E.areas.forEach((ar, i) => {
+    const tot = ar.to - ar.from + 1;
+    pills += `<a class="pill" href="#sec${i}" data-s="${i}">${i + 1} · ${esc(ar.short || ar.name)} <em>0/${tot}</em></a>`;
+    h += `<section class="sec" id="sec${i}"><div class="sec-h"><span class="tag">Bagian ${i + 1}</span><h2>${esc(ar.name)}</h2><p>Soal ${ar.from}–${ar.to}${i === 0 ? " · Pilih satu jawaban yang paling tepat. Setiap soal bernilai 1 poin." : ""}</p></div>`;
+    E.mc.filter(([n]) => n >= ar.from && n <= ar.to).forEach(([n, q, o]) => {
+      h += `<div class="q"><div class="qt"><b>${n}.</b> ${esc(q)}</div><div class="opts">${o.map((t, k) =>
+        `<label class="opt"><input type="radio" name="mc${n}" data-n="${n}" value="${L[k]}"><span class="k">${L[k]}</span><span>${esc(t)}</span></label>`).join("")}</div></div>`;
+    });
+    h += `</section>`;
   });
-  h += `</section><section class="sec" id="secB"><div class="sec-h"><span class="tag">Section B</span><h2>True / False + Reasoning</h2><p>Tentukan Benar atau Salah, lalu berikan alasan. (10 poin)</p></div>`;
-  E.tf.forEach(([n, q]) => {
-    h += `<div class="q"><div class="qt"><b>${n}.</b> ${esc(q)}</div><div class="tf">
-      <label class="opt"><input type="radio" name="tf${n}" data-k="tf" data-n="${n}" value="B"><span class="k">B</span><span>Benar</span></label>
-      <label class="opt"><input type="radio" name="tf${n}" data-k="tf" data-n="${n}" value="S"><span class="k">S</span><span>Salah</span></label></div>
-      <textarea data-k="tfr" data-n="${n}" rows="2" placeholder="Alasan Anda…"></textarea></div>`;
-  });
-  h += `</section><section class="sec" id="secC"><div class="sec-h"><span class="tag">Section C</span><h2>Case Analysis</h2><p>Jawab berdasarkan analisis kasus. Yang dinilai adalah ketepatan reasoning dan penerapan, bukan redaksi baku. (20 poin)</p></div>`;
-  E.cases.forEach((c, i) => {
-    h += `<div class="case"><h3>Case ${i + 1} — ${esc(c.title)}</h3><div class="scn">${esc(c.scenario)}</div>`;
-    c.qs.forEach(([n, q]) => h += `<div class="q"><div class="qt"><b>${n}.</b> ${esc(q)}</div><textarea data-k="txt" data-n="${n}" placeholder="Jawaban Anda…"></textarea></div>`);
-    h += `</div>`;
-  });
-  h += `</section><section class="sec" id="secD"><div class="sec-h"><span class="tag">Section D</span><h2>Integrated Transition Case</h2><p>Analisis kasus terpadu berikut. (20 poin)</p></div>
-    <div class="case"><h3>${esc(E.integrated.title)}</h3><div class="scn">${esc(E.integrated.scenario)}</div>`;
-  E.integrated.qs.forEach(([n, lb, q]) => h += `<div class="q"><div class="qt"><b>${n}. ${esc(lb.toUpperCase())}</b> — ${esc(q)}</div><textarea data-k="txt" data-n="${n}" placeholder="Jawaban Anda…"></textarea></div>`);
-  h += `</div></section><div class="submitbar"><span class="mut small">Periksa kembali jawaban Anda sebelum mengirim. Setelah dikirim, jawaban tidak dapat diubah.</span><button class="btn" id="bSubmit">Kirim Jawaban</button></div>`;
+  h += `<div class="submitbar"><span class="mut small">Periksa kembali jawaban Anda sebelum mengirim. Setelah dikirim, jawaban tidak dapat diubah.</span><button class="btn" id="bSubmit">Kirim Jawaban</button></div>`;
+  $("#subnav").innerHTML = pills;
   $("#exam").innerHTML = h;
-  $("#exam").addEventListener("input", onChange); $("#exam").addEventListener("change", onChange);
+  $("#exam").addEventListener("change", onChange);
   $("#bSubmit").onclick = openConfirm;
 }
 function restore() {
-  document.querySelectorAll("#exam [data-k]").forEach(el => {
-    const v = (ans[el.dataset.k] || {})[el.dataset.n];
-    if (el.type === "radio") el.checked = v === el.value; else if (v !== undefined && el.value !== v) el.value = v;
-  });
+  document.querySelectorAll("#exam input[type=radio]").forEach(el => { el.checked = ans.mc[el.dataset.n] === el.value; });
 }
 function onChange(e) {
-  const el = e.target, k = el.dataset.k; if (!k || done) return;
-  if (el.type === "radio" && !el.checked) return;
-  ans[k][el.dataset.n] = el.value; dirty = true; writeCache(); progress();   // simpan lokal seketika
+  const el = e.target; if (!el.dataset.n || done) return;
+  if (el.type !== "radio" || !el.checked) return;
+  ans.mc[el.dataset.n] = el.value; dirty = true; writeCache(); progress();   // simpan lokal seketika
   setSt("menyimpan…"); clearTimeout(saveT); saveT = setTimeout(flush, 1200);
 }
 function count() {
-  const f = o => Object.values(o || {}).filter(v => String(v).trim()).length;
-  return f(ans.mc) + f(ans.tf) + f(ans.txt);
+  return Object.values(ans.mc || {}).filter(v => String(v).trim()).length;
 }
-const SEC = { A: E.mc.map(x => x[0]), B: E.tf.map(x => x[0]), C: E.cases.flatMap(c => c.qs.map(x => x[0])), D: E.integrated.qs.map(x => x[0]) };
-const SRC = { A: "mc", B: "tf", C: "txt", D: "txt" };
 function progress() {
   const c = count(); $("#pCount").textContent = c; $("#pBar").style.width = (c / E.total * 100) + "%";
   document.querySelectorAll(".pill").forEach(p => {
-    const s = p.dataset.s, n = SEC[s].filter(i => String((ans[SRC[s]] || {})[i] ?? "").trim()).length;
-    p.querySelector("em").textContent = n + "/" + SEC[s].length; p.classList.toggle("full", n === SEC[s].length);
+    const ar = E.areas[p.dataset.s], tot = ar.to - ar.from + 1;
+    const n = Object.keys(ans.mc).filter(k => +k >= ar.from && +k <= ar.to && String(ans.mc[k]).trim()).length;
+    p.querySelector("em").textContent = n + "/" + tot; p.classList.toggle("full", n === tot);
   });
-  document.querySelectorAll("#exam .q").forEach(q => {
-    const t = q.querySelector("textarea[data-k=txt]"), r = q.querySelector("input[type=radio]");
-    q.classList.toggle("done", !!(r ? q.querySelector("input:checked") : t && t.value.trim()));
-  });
+  document.querySelectorAll("#exam .q").forEach(q => q.classList.toggle("done", !!q.querySelector("input:checked")));
 }
 
 // ---- kirim jawaban ----

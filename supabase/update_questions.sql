@@ -1,25 +1,9 @@
 -- =====================================================================
--- Final Assessment ISO 9001:2026 — skema Supabase
--- Jalankan SELURUH isi file ini di Supabase → SQL Editor.
--- WAJIB: ganti 'GANTI_EMAIL_ADMIN@perusahaan.com' di bawah dengan email admin Anda.
+-- UPDATE BANK SOAL → 100 soal pilihan ganda (ISO 9001:2026)
+-- Untuk instalasi yang SUDAH berjalan: jalankan file ini di Supabase → SQL Editor.
+-- Hanya mengganti kunci jawaban di tabel grading_config. Tabel peserta/batch tidak disentuh.
+-- Aman dijalankan ulang.
 -- =====================================================================
-
--- 1) Daftar admin (berdasarkan email akun Supabase Auth)
-create table if not exists public.admins (email text primary key);
-alter table public.admins enable row level security;   -- tanpa policy = tidak bisa diakses via API
-insert into public.admins (email) values (lower('admin@totalquality.co.id')) on conflict do nothing;
-
-create or replace function public.is_admin() returns boolean
-language sql stable security definer set search_path = public as $$
-  select coalesce(auth.role(),'') = 'authenticated'
-     and exists (select 1 from public.admins where email = lower(coalesce(auth.jwt() ->> 'email','')));
-$$;
-
--- 2) Kunci jawaban & pembahasan — 100 soal pilihan ganda (hanya admin yang bisa membaca)
-create table if not exists public.grading_config (id int primary key, config jsonb not null);
-alter table public.grading_config enable row level security;
-drop policy if exists cfg_select on public.grading_config;
-create policy cfg_select on public.grading_config for select to authenticated using (public.is_admin());
 
 insert into public.grading_config (id, config) values (1, $cfg${
  "version": "qb100-2026-v1",
@@ -332,51 +316,5 @@ insert into public.grading_config (id, config) values (1, $cfg${
 }$cfg$::jsonb)
 on conflict (id) do update set config = excluded.config;
 
--- 3) Data pengerjaan peserta
-create table if not exists public.attempts (
-  id uuid primary key default gen_random_uuid(),
-  user_id uuid not null default auth.uid(),
-  name text not null check (char_length(name) between 2 and 120),
-  job_title text not null check (char_length(job_title) between 2 and 120),
-  status text not null default 'in_progress' check (status in ('in_progress','submitted','graded')),
-  answers jsonb not null default '{}'::jsonb,
-  answered_count int not null default 0,
-  started_at timestamptz not null default now(),
-  last_saved_at timestamptz,
-  submitted_at timestamptz,
-  manual_scores jsonb not null default '{}'::jsonb,
-  trainer_notes text,
-  graded_at timestamptz
-);
-create index if not exists attempts_user_idx on public.attempts (user_id);
-alter table public.attempts enable row level security;
-
-drop policy if exists att_ins on public.attempts; drop policy if exists att_sel on public.attempts;
-drop policy if exists att_upd on public.attempts; drop policy if exists att_del on public.attempts;
-create policy att_ins on public.attempts for insert to authenticated with check (user_id = auth.uid());
-create policy att_sel on public.attempts for select to authenticated using (user_id = auth.uid() or public.is_admin());
-create policy att_upd on public.attempts for update to authenticated using (user_id = auth.uid() or public.is_admin()) with check (user_id = auth.uid() or public.is_admin());
-create policy att_del on public.attempts for delete to authenticated using (public.is_admin());
-
--- 4) Pengaman: peserta hanya boleh mengubah jawabannya sendiri dan mengirim (in_progress -> submitted).
---    Nilai, catatan, status 'graded', dan data identitas tidak dapat diubah peserta.
-create or replace function public.attempts_guard() returns trigger language plpgsql as $$
-begin
-  if coalesce(auth.role(),'') in ('anon','authenticated') and not public.is_admin() then
-    if tg_op = 'INSERT' then
-      new.user_id := auth.uid(); new.status := 'in_progress'; new.manual_scores := '{}'::jsonb;
-      new.trainer_notes := null; new.graded_at := null; new.submitted_at := null;
-    else
-      if old.status <> 'in_progress' then raise exception 'Jawaban sudah dikirim dan tidak dapat diubah'; end if;
-      new.id := old.id; new.user_id := old.user_id; new.name := old.name; new.job_title := old.job_title;
-      new.started_at := old.started_at; new.manual_scores := old.manual_scores;
-      new.trainer_notes := old.trainer_notes; new.graded_at := old.graded_at;
-      if new.status = 'submitted' then new.submitted_at := now();
-      else new.status := 'in_progress'; new.submitted_at := null; end if;
-      new.last_saved_at := now();
-    end if;
-  end if;
-  return new;
-end $$;
-drop trigger if exists trg_attempts_guard on public.attempts;
-create trigger trg_attempts_guard before insert or update on public.attempts for each row execute function public.attempts_guard();
+-- OPSIONAL — hapus data peserta uji/versi lama (JANGAN dijalankan bila ada data peserta asli yang masih diperlukan):
+-- delete from public.attempts;

@@ -8,10 +8,12 @@ Aplikasi statis (HTML/JS) + Supabase. Tidak ada server yang perlu Anda kelola.
 | `index.html` | Halaman peserta (bagikan tautan ini) |
 | `admin.html` | Konsol trainer (jangan dibagikan) |
 | `assets/config.js` | **Tempat Anda mengisi kredensial Supabase** |
-| `assets/questions.js` | Bank soal (50 butir) |
+| `assets/questions.js` | Bank soal: 100 butir pilihan ganda (tanpa kunci) |
 | `assets/logo.png` | **Logo Anda** (letakkan sendiri; lihat bagian Logo) |
 | `sw.js` | Menyimpan aplikasi di browser agar bisa di-refresh saat offline |
-| `supabase/schema.sql` | Tabel, keamanan (RLS), kunci jawaban & rubrik |
+| `supabase/schema.sql` | Tabel, keamanan (RLS), kunci jawaban & pembahasan |
+| `supabase/batch.sql` | Fitur batch per Copart |
+| `supabase/update_questions.sql` | Mengganti kunci jawaban ke bank soal 100 PG (untuk instalasi yang sudah berjalan) |
 
 ## Langkah 1 — Buat project Supabase
 1. Masuk ke https://supabase.com → **New project**. Simpan database password Anda.
@@ -26,9 +28,11 @@ Aplikasi statis (HTML/JS) + Supabase. Tidak ada server yang perlu Anda kelola.
 2. Supabase → **SQL Editor → New query** → tempel seluruh isi file → **Run**. Harus muncul "Success".
 3. Cek di **Table Editor**: ada tabel `attempts`, `grading_config`, `admins`.
 
-> Kunci jawaban dan rubrik tersimpan di tabel `grading_config` dan hanya bisa dibaca akun admin. Peserta tidak dapat melihatnya lewat browser.
+> Kunci jawaban dan pembahasan tersimpan di tabel `grading_config` dan hanya bisa dibaca akun admin. Peserta tidak dapat melihatnya lewat browser.
 
 > **Sudah pernah menjalankan `schema.sql` sebelumnya?** Cukup jalankan `supabase/batch.sql` (aman dijalankan ulang). Data peserta lama tetap utuh dan tampil sebagai "Tanpa batch".
+
+> **Instalasi lama yang sekarang memakai bank soal 100 pilihan ganda: WAJIB jalankan `supabase/update_questions.sql`** di SQL Editor (aman dijalankan ulang). Tanpa ini, halaman admin menolak login dengan pesan bahwa kunci jawaban belum diperbarui. File ini hanya mengganti kunci jawaban; data peserta dan batch tidak disentuh. Peserta yang dikerjakan dengan bank soal lama ditandai **"Soal versi lama"** dan tidak ikut dinilai/dirata-rata; hapus bila hanya data uji.
 
 ## Langkah 4 — Isi kredensial
 1. Supabase → **Project Settings → API** (atau tombol **Connect**).
@@ -42,7 +46,7 @@ Pilih salah satu hosting statis (gratis): Netlify (drag & drop folder), Cloudfla
 
 ## Langkah 6 — Uji sebelum dipakai
 1. Buka `index.html`, isi nama & jabatan, jawab beberapa soal, tutup tab, buka lagi (harus lanjut dari posisi terakhir), lalu kirim.
-2. Buka `admin.html`, login, pastikan peserta uji muncul, buka detail, beri nilai, klik **Simpan Penilaian**, lalu **Ekspor Excel**.
+2. Buka `admin.html`, login, pastikan peserta uji muncul dengan nilai otomatis, buka detail (kunci, jawaban, pembahasan, rincian per area), lalu **Ekspor Excel**.
 3. Hapus data uji lewat tombol **Hapus peserta**.
 
 ## Batch per Copart
@@ -65,11 +69,14 @@ Simpan logo Anda sebagai `assets/logo.png` (disarankan PNG transparan, rasio leb
 - Tetap di perangkat dan browser yang sama saat melanjutkan. Berganti perangkat saat online juga bisa (diambil dari server), tetapi jawaban yang belum sempat tersinkron di perangkat lama tidak ikut.
 
 ## Cara kerja penilaian
-- **Section A (50) dan B-pilihan B/S (5)**: otomatis dari kunci.
-- **Section B-alasan (5), C (20), D (20)**: dinilai manual oleh trainer per item rubrik. Status menjadi *Selesai dinilai* setelah seluruh 19 item terisi; sebelum itu berstatus draft.
-- Kategori nilai mengikuti tabel interpretasi pada Trainer Answer Key. Jika **Application (Section C) < 12/20** dan total ≥ 70, muncul peringatan guardrail.
-- Rekomendasi remedial muncul untuk kompetensi pilihan ganda < 60% dan untuk Section D < 12/20 (ambang 60% adalah asumsi saya; ubah di `admin.js` bila perlu).
-- No. 50 (Management Question) **tidak punya bobot** pada rubrik sumber, sehingga ditampilkan untuk dibaca tetapi tidak dinilai.
+- Seluruh 100 soal pilihan ganda, **1 poin per soal**, dinilai **otomatis** begitu peserta mengirim jawaban. Tidak ada penilaian manual; status peserta langsung **Selesai**.
+- Kategori nilai (EXCELLENT ≥ 90, VERY GOOD / COMPETENT ≥ 80, COMPETENT ≥ 70, NEEDS IMPROVEMENT ≥ 60, selainnya NOT YET COMPETENT) memakai ambang yang sama dengan versi sebelumnya.
+- Detail peserta menampilkan rincian per area (FND, CTX, LDR, R&O, SUP, OPS, PER, PER/IMP) serta kunci dan pembahasan tiap soal; ada filter "hanya jawaban salah / kosong". Rekomendasi remedial muncul untuk area < 60% (ambang 60% adalah asumsi; ubah di `admin.js` bila perlu).
+- Catatan trainer tetap bisa diisi per peserta.
+- Excel berisi dua sheet: **Rekap Nilai** (termasuk skor per area) dan **Detail Jawaban** (jawaban, kunci, poin per soal).
+
+## Mengganti atau mengubah soal
+Soal ada di `assets/questions.js`; kunci dan pembahasan ada di database (`grading_config`). Keduanya dihubungkan oleh `version` yang harus sama di kedua tempat. Jika Anda mengubah soal, ubah juga kunci di SQL, naikkan `version`, lalu jalankan ulang SQL-nya. Jika berbeda, admin menolak login (pencegahan salah nilai). Jawaban yang tersimpan dengan `version` lain tidak dinilai.
 
 ## Batasan yang perlu Anda ketahui
 - Timer berjalan di browser peserta (dihitung dari `started_at` yang dicatat server). Waktu submit juga dicatat server, jadi kelebihan durasi tetap terlihat di kolom Durasi, tetapi tidak diblokir.

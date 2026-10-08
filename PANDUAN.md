@@ -32,6 +32,8 @@ Aplikasi statis (HTML/JS) + Supabase. Tidak ada server yang perlu Anda kelola.
 
 > **Sudah pernah menjalankan `schema.sql` sebelumnya?** Cukup jalankan `supabase/batch.sql` (aman dijalankan ulang). Data peserta lama tetap utuh dan tampil sebagai "Tanpa batch".
 
+> **Fitur durasi per batch memerlukan `supabase/batch.sql` dijalankan ulang** (aman diulang; instalasi lama cukup file ini).
+
 > **Instalasi lama yang sekarang memakai bank soal 100 pilihan ganda: WAJIB jalankan `supabase/update_questions.sql`** di SQL Editor (aman dijalankan ulang). Tanpa ini, halaman admin menolak login dengan pesan bahwa kunci jawaban belum diperbarui. File ini hanya mengganti kunci jawaban; data peserta dan batch tidak disentuh. Peserta yang dikerjakan dengan bank soal lama ditandai **"Soal versi lama"** dan tidak ikut dinilai/dirata-rata; hapus bila hanya data uji.
 
 ## Langkah 4 — Isi kredensial
@@ -50,12 +52,13 @@ Pilih salah satu hosting statis (gratis): Netlify (drag & drop folder), Cloudfla
 3. Hapus data uji lewat tombol **Hapus peserta**.
 
 ## Batch per Copart
-1. Di `admin.html` buka tab **Batch**, isi nama Copart (dan keterangan bila perlu), klik **Buat Batch**. Muncul kode 6 angka, misalnya `482915`.
+1. Di `admin.html` buka tab **Batch**, isi nama Copart, **durasi pengerjaan (menit, 5–600; bawaan 90)**, dan keterangan bila perlu, klik **Buat Batch**. Muncul kode 6 angka, misalnya `482915`.
 2. Bagikan **kode** atau **tautan** (tombol Salin tautan; peserta langsung masuk dengan kode terisi, misalnya `https://domain-anda/?kode=482915`).
 3. Peserta membuka halaman peserta → memasukkan kode → melihat nama Copart pada judul ("Training ISO 9001:2026 — nama Copart") → mengisi nama dan jabatan; kolom Copart terisi otomatis dan tidak bisa diubah.
-4. **Tutup batch** menghentikan pendaftaran peserta baru. Peserta yang sudah mulai tetap bisa menyelesaikan ujiannya.
-5. Di tab **Peserta**, filter **Semua batch** membatasi daftar, statistik, dan **Ekspor Excel** ke satu Copart. Excel memuat kolom Copart dan Kode Batch di setiap sheet; nama file memuat nama Copart.
-6. **Hapus batch** hanya menghapus kodenya. Data peserta tetap tersimpan dengan nama Copart-nya.
+4. Durasi ditampilkan ke peserta setelah memasukkan kode, dan disalin ke data peserta saat ia menekan **Mulai Ujian**. Mengubah durasi tidak berlaku mundur untuk peserta yang sudah mulai. Peserta lama (sebelum fitur ini) memakai durasi bawaan di `questions.js`.
+5. **Tutup batch** menghentikan pendaftaran peserta baru. Peserta yang sudah mulai tetap bisa menyelesaikan ujiannya.
+6. Di tab **Peserta**, filter **Semua batch** membatasi daftar, statistik, dan **Ekspor Excel** ke satu Copart. Excel memuat kolom Copart dan Kode Batch di setiap sheet; nama file memuat nama Copart.
+7. **Hapus batch** hanya menghapus kodenya. Data peserta tetap tersimpan dengan nama Copart-nya.
 
 ## Logo
 Simpan logo Anda sebagai `assets/logo.png` (disarankan PNG transparan, rasio lebar ≥ tinggi, minimal 300 px lebar). Logo tampil di halaman peserta, halaman admin, dan favicon. Jika file belum ada, otomatis tampil kotak teks "QMS". Setelah mengganti logo, naikkan angka versi `exam-shell-v2` di `sw.js` (mis. `v3`) agar browser peserta memuat logo baru.

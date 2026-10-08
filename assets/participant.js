@@ -11,7 +11,7 @@ const setSt = t => $("#saveSt").textContent = t;
 // ---- cache lokal: salinan jawaban di perangkat, aman dari refresh & putus koneksi ----
 const readCache = () => { try { return JSON.parse(localStorage.getItem(CK)); } catch { return null; } };
 const writeCache = () => { try {
-  localStorage.setItem(CK, JSON.stringify({ attempt: { id: attempt.id, user_id: attempt.user_id, name: attempt.name, job_title: attempt.job_title, copart: attempt.copart, batch_id: attempt.batch_id, started_at: attempt.started_at }, answers: ans, dirty, pending, done }));
+  localStorage.setItem(CK, JSON.stringify({ attempt: { id: attempt.id, user_id: attempt.user_id, name: attempt.name, job_title: attempt.job_title, copart: attempt.copart, batch_id: attempt.batch_id, duration_minutes: attempt.duration_minutes, started_at: attempt.started_at }, answers: ans, dirty, pending, done }));
 } catch {} };
 
 async function init() {
@@ -38,7 +38,7 @@ async function init() {
 }
 
 let batch = null;
-function showCode() { batch = null; $("#sSub").textContent = E.training; $("#fCode").hidden = false; $("#fStart").hidden = true; }
+function showCode() { batch = null; $("#mT").textContent = E.minutes; $("#sSub").textContent = E.training; $("#fCode").hidden = false; $("#fStart").hidden = true; }
 $("#code").addEventListener("input", e => e.target.value = e.target.value.replace(/\D/g, "").slice(0, 6));
 $("#fCode").addEventListener("submit", e => { e.preventDefault(); lookup($("#code").value); });
 $("#bChange").onclick = e => { e.preventDefault(); showCode(); $("#code").select(); };
@@ -51,7 +51,7 @@ async function lookup(raw) {
   if (error) return $("#cErr").textContent = "Tidak dapat memeriksa kode. Periksa koneksi lalu coba lagi.";
   if (!data || !data.length) return $("#cErr").textContent = "Kode batch tidak ditemukan. Periksa kembali kode dari trainer.";
   if (!data[0].is_open) return $("#cErr").textContent = "Batch ini sudah ditutup. Hubungi trainer Anda.";
-  batch = { code, copart: data[0].copart };
+  batch = { code, copart: data[0].copart, minutes: data[0].duration_minutes || E.minutes }; $("#mT").textContent = batch.minutes;
   $("#sSub").textContent = E.training + " — " + batch.copart; $("#copart").value = batch.copart;
   $("#fCode").hidden = true; $("#fStart").hidden = false; $("#name").focus();
 }
@@ -74,7 +74,7 @@ function startExam(saved) {
   if (saved && !same && Object.keys(saved).length) dirty = true;
   $("#who").textContent = attempt.name + " · " + attempt.job_title + (attempt.copart ? " · " + attempt.copart : "");
   render(); restore(); progress(); view("vExam"); net();
-  const end = new Date(attempt.started_at).getTime() + E.minutes * 60000;
+  const end = new Date(attempt.started_at).getTime() + (attempt.duration_minutes || E.minutes) * 60000;   // durasi dari batch; data lama pakai bawaan
   const t = () => {
     const s = Math.max(0, Math.round((end - Date.now()) / 1000));
     $("#timer").textContent = String(Math.floor(s / 60)).padStart(2, "0") + ":" + String(s % 60).padStart(2, "0");

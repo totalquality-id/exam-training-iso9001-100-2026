@@ -104,12 +104,13 @@ function renderBatches() {
     const p = rows.filter(r => r.batch_id === b.id), sub = p.filter(r => r.status !== "in_progress").length;
     return `<tr><td><div class="b">${esc(b.copart)}</div>${b.note ? `<div class="mut small">${esc(b.note)}</div>` : ""}</td>
       <td><span class="code">${esc(b.code)}</span></td>
+      <td class="small">${b.duration_minutes || E.minutes} mnt</td>
       <td><span class="badge ${b.is_open ? "b-graded" : "b-in_progress"}">${b.is_open ? "Dibuka" : "Ditutup"}</span></td>
       <td>${p.length} peserta<div class="mut small">${sub} sudah submit</div></td><td class="small">${fmtD(b.created_at)}</td>
       <td class="acts"><button class="btn ghost sm" data-a="code" data-id="${b.id}">Salin kode</button><button class="btn ghost sm" data-a="link" data-id="${b.id}">Salin tautan</button>
       <button class="btn ghost sm" data-a="view" data-id="${b.id}">Lihat peserta</button><button class="btn ghost sm" data-a="toggle" data-id="${b.id}">${b.is_open ? "Tutup batch" : "Buka batch"}</button>
       <button class="btn danger sm" data-a="del" data-id="${b.id}">Hapus</button></td></tr>`;
-  }).join("") : `<tr><td colspan="6" class="mut" style="text-align:center;padding:32px">Belum ada batch. Buat batch pertama di atas.</td></tr>`;
+  }).join("") : `<tr><td colspan="7" class="mut" style="text-align:center;padding:32px">Belum ada batch. Buat batch pertama di atas.</td></tr>`;
   $("#bt").querySelectorAll("button[data-a]").forEach(btn => btn.onclick = () => batchAct(btn.dataset.a, batches.find(b => b.id === btn.dataset.id), btn));
 }
 async function batchAct(a, b, btn) {
@@ -125,12 +126,14 @@ async function batchAct(a, b, btn) {
 $("#bnAdd").onclick = async () => {
   const name = $("#bnName").value.trim(); $("#bnErr").textContent = ""; $("#bnOk").innerHTML = "";
   if (name.length < 2) return $("#bnErr").textContent = "Isi nama Copart (minimal 2 karakter).";
+  const min = Number($("#bnMin").value);
+  if (!Number.isInteger(min) || min < 5 || min > 600) return $("#bnErr").textContent = "Durasi harus berupa bilangan bulat antara 5 dan 600 menit.";
   $("#bnAdd").disabled = true;
-  const { data, error } = await sb.rpc("create_batch", { p_copart: name, p_note: $("#bnNote").value });
+  const { data, error } = await sb.rpc("create_batch", { p_copart: name, p_note: $("#bnNote").value, p_minutes: min });
   $("#bnAdd").disabled = false;
-  if (error) return $("#bnErr").textContent = "Gagal membuat batch: " + error.message;
-  $("#bnName").value = ""; $("#bnNote").value = "";
-  $("#bnOk").innerHTML = `<div class="newcode"><div><div class="small mut">Batch dibuat untuk <b>${esc(data.copart)}</b>. Bagikan kode ini ke peserta:</div><div class="code" style="margin-top:8px">${esc(data.code)}</div></div>
+  if (error) return $("#bnErr").textContent = "Gagal membuat batch: " + error.message + (/function|p_minutes|schema cache/i.test(error.message) ? " — jalankan ulang supabase/batch.sql di SQL Editor." : "");
+  $("#bnName").value = ""; $("#bnNote").value = ""; $("#bnMin").value = min;
+  $("#bnOk").innerHTML = `<div class="newcode"><div><div class="small mut">Batch dibuat untuk <b>${esc(data.copart)}</b> (durasi ${data.duration_minutes} menit). Bagikan kode ini ke peserta:</div><div class="code" style="margin-top:8px">${esc(data.code)}</div></div>
     <div class="sp"></div><button class="btn ghost sm" id="ncCode">Salin kode</button><button class="btn ghost sm" id="ncLink">Salin tautan</button></div>`;
   $("#ncCode").onclick = e => copy(data.code, e.target); $("#ncLink").onclick = e => copy(pubUrl(data.code), e.target);
   load();

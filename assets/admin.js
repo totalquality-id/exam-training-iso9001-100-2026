@@ -26,6 +26,7 @@ const Q = {};
 E.mc.forEach(([n, q, o]) => Q[n] = { text: q, opts: o });
 
 let sb, cfg, rows = [], batches = [], cur = null, poll, bf = "all", fsv = "all", hasSettings = true, editId = null, an = { sort: "no", area: "all" };
+let route = { p: "list", id: null }, listY = 0;
 
 async function init() {
   if (!CFG.SUPABASE_URL || CFG.SUPABASE_URL.startsWith("GANTI")) { view("vLogin"); $("#lErr").textContent = "Isi assets/config.js terlebih dahulu."; return; }
@@ -47,22 +48,67 @@ async function enter(email) {
   const probe = await sb.from("batches").select("settings,open_from,open_until").limit(1);
   hasSettings = !probe.error;
   $("#me").textContent = email;
-  view("vApp"); await load(); poll = setInterval(load, 10000);
+  view("vApp"); await load(); render(); poll = setInterval(load, 10000);
 }
-$("#bOut").onclick = async () => { clearInterval(poll); await sb.auth.signOut(); location.reload(); };
+$("#bOut").onclick = async () => { clearInterval(poll); await sb.auth.signOut(); location.hash = ""; location.reload(); };
 $("#bRef").onclick = load;
 $("#qs").oninput = $("#sort").onchange = () => renderList();
 $("#fs").onclick = e => { const b = e.target.closest("button"); if (!b) return; fsv = b.dataset.v; $$("#fs button").forEach(x => x.classList.toggle("on", x === b)); renderList(); };
-$$(".fb").forEach(s => s.onchange = e => setBf(e.target.value));
-$$(".ntab").forEach(b => b.onclick = () => go(b.dataset.p));
-function setBf(v) { bf = v; $$(".fb").forEach(s => s.value = v); setXlsLabel(); renderList(); if (!$("#pgAnal").hidden) renderAnal(); }
-function go(p) {
-  if (cur) { cur = null; $("#vDet").hidden = true; $("#vList").hidden = false; }
-  $$(".ntab").forEach(b => b.classList.toggle("on", b.dataset.p === p));
-  $("#pgList").hidden = p !== "list"; $("#pgBatch").hidden = p !== "batch"; $("#pgAnal").hidden = p !== "anal";
-  if (p === "batch") renderBatches(); if (p === "anal") renderAnal(); if (p === "list") renderList();
-  window.scrollTo(0, 0);
+$("#fb").onchange = e => setBf(e.target.value);
+
+// ---- navigasi berbasis URL: #/peserta, #/peserta/<id>, #/batch, #/analisis (+ ?batch=<id>) ----
+// Tombol Back/Forward browser, refresh, dan tautan langsung ke halaman/peserta tetap berfungsi.
+const PATH = { list: "peserta", batch: "batch", anal: "analisis" }, PAGE = { peserta: "list", batch: "batch", analisis: "anal" };
+const href = (p, id) => "#/" + PATH[p] + (id ? "/" + id : "") + (bf !== "all" ? "?batch=" + bf : "");
+function parseHash() {
+  const [path, qs] = location.hash.replace(/^#\/?/, "").split("?"), [pg, id] = path.split("/");
+  return { p: PAGE[pg] || "list", id: id || null, b: new URLSearchParams(qs || "").get("batch") || "all" };
 }
+const nav = (p, id) => { location.hash = href(p, id); };
+window.addEventListener("hashchange", render);
+function render() {
+  const r = parseHash(), fromList = route.p === "list" && !route.id && !$("#vList").hidden;
+  if (r.b !== bf) { bf = [...$("#fb").options].some(o => o.value === r.b) ? r.b : "all"; $("#fb").value = bf; setXlsLabel(); }
+  if (r.id && fromList) listY = window.scrollY;                       // ingat posisi daftar
+  const backToList = route.id && !r.id && r.p === "list";
+  route = { p: r.p, id: r.id };
+  $$(".sn-i").forEach(a => { const on = a.dataset.p === r.p; a.classList.toggle("on", on); on ? a.setAttribute("aria-current", "page") : a.removeAttribute("aria-current"); a.href = href(a.dataset.p); });
+  document.title = (r.id ? "Detail peserta" : { list: "Peserta", batch: "Batch", anal: "Analisis soal" }[r.p]) + " — Trainer Console";
+  if (r.id) { $("#vList").hidden = true; $("#vDet").hidden = false; navCounts(); openDet(r.id); return; }
+  cur = null; $("#vDet").hidden = true; $("#vList").hidden = false;
+  $("#pgList").hidden = r.p !== "list"; $("#pgBatch").hidden = r.p !== "batch"; $("#pgAnal").hidden = r.p !== "anal";
+  paint();
+  window.scrollTo(0, backToList ? listY : 0);
+}
+function paint() {                                                    // gambar ulang halaman yang tampil tanpa mengubah posisi scroll
+  navCounts();
+  if (route.id) return;
+  if (route.p === "list") renderList(); else if (route.p === "batch") renderBatches(); else renderAnal();
+}
+function setBf(v) {
+  bf = v; $("#fb").value = v; setXlsLabel();
+  history.replaceState(null, "", href(route.p, route.id));
+  $$(".sn-i").forEach(a => a.href = href(a.dataset.p));
+  paint();
+}
+function navCounts() {
+  const base = batchRows(), live = base.filter(r => r.status === "in_progress").length;
+  $("#nList").innerHTML = base.length ? base.length + (live ? ` <i title="${live} sedang mengerjakan">${live} aktif</i>` : "") : "";
+  $("#nBatch").textContent = batches.length || "";
+  const b = bOf(bf), ctx = bf === "all" ? "Semua batch" : bf === "none" ? "Tanpa batch (data lama)" : b ? `${b.copart} · kode ${b.code}` : "";
+  $("#ctxList").textContent = ctx + " · diperbarui otomatis";
+  $("#ctxAnal").textContent = ctx + " · dari peserta yang sudah mengirim jawaban";
+}
+// pintasan keyboard: / cari, Esc kembali ke daftar, ← → peserta sebelumnya/berikutnya
+document.addEventListener("keydown", e => {
+  if (!$("#mBatch").hidden || $("#vApp").hidden) return;
+  const typing = /^(INPUT|TEXTAREA|SELECT)$/.test(document.activeElement.tagName);
+  if (e.key === "/" && !typing && route.p === "list" && !route.id) { e.preventDefault(); $("#qs").focus(); }
+  if (!route.id || typing || e.ctrlKey || e.metaKey || e.altKey) return;
+  if (e.key === "Escape") nav("list");
+  if (e.key === "ArrowLeft" && $("#bPrev")) $("#bPrev").click();
+  if (e.key === "ArrowRight" && $("#bNext")) $("#bNext").click();
+});
 const batchRows = () => bf === "all" ? rows : bf === "none" ? rows.filter(r => !r.batch_id) : rows.filter(r => r.batch_id === bf);
 const bOf = id => batches.find(b => b.id === id);
 const bcode = id => (bOf(id) || {}).code || "";
@@ -80,8 +126,7 @@ async function load() {
   if (a.error) return $("#upd").textContent = "Gagal memuat: " + a.error.message;
   rows = a.data; batches = b.data || [];
   $("#upd").textContent = b.error ? "Jalankan supabase/batch.sql terlebih dahulu" : "Diperbarui " + new Date().toLocaleTimeString("id-ID", { hour: "2-digit", minute: "2-digit" });
-  renderBatchFilter();
-  if (!$("#pgList").hidden) renderList(); if (!$("#pgBatch").hidden) renderBatches(); if (!$("#pgAnal").hidden && !$("#vList").hidden) renderAnal();
+  renderBatchFilter(); paint();
   if (cur) {
     const x = rows.find(r => r.id === cur.a.id);
     if (x && cur.a.status === "in_progress" && (x.status !== cur.a.status || x.last_saved_at !== cur.a.last_saved_at || x.duration_minutes !== cur.a.duration_minutes)) openDet(x.id, true);
@@ -89,8 +134,8 @@ async function load() {
 }
 function renderBatchFilter() {
   const v = bf, opts = `<option value="all">Semua batch</option>` + batches.map(b => `<option value="${b.id}">${esc(b.copart)} · ${esc(b.code)}</option>`).join("") + (rows.some(r => !r.batch_id) ? `<option value="none">Tanpa batch (data lama)</option>` : "");
-  $$(".fb").forEach(sel => { sel.innerHTML = opts; sel.value = [...sel.options].some(o => o.value === v) ? v : "all"; });
-  bf = $(".fb").value; setXlsLabel();
+  const sel = $("#fb"); sel.innerHTML = opts; sel.value = [...sel.options].some(o => o.value === v) ? v : "all";
+  bf = sel.value; setXlsLabel();
 }
 
 // ---- perhitungan nilai (otomatis: 1 poin per soal) ----
@@ -127,15 +172,11 @@ function renderList() {
     + stat("Selesai", base.length - prog, base.length ? Math.round((base.length - prog) / base.length * 100) + "% dari peserta" : "")
     + stat("Rata-rata nilai", avg, top !== null ? "tertinggi " + top : "", true)
     + stat("Kelulusan", cs.length ? Math.round(passN / cs.length * 100) + "%" : "—", cs.length ? `${passN} dari ${cs.length} lulus` : "belum ada nilai", true);
-  const q = $("#qs").value.toLowerCase(), so = $("#sort").value;
-  let list = base.filter(r => (fsv === "all" || (fsv === "done" ? r.status !== "in_progress" : r.status === fsv)) && (r.name + " " + r.job_title + " " + (r.copart || "")).toLowerCase().includes(q));
-  const sc = r => scored(r) && isCur(r) ? calc(r).total : -1;
-  if (so === "score") list = [...list].sort((a, b) => sc(b) - sc(a));
-  if (so === "low") list = [...list].sort((a, b) => (sc(a) < 0 ? 999 : sc(a)) - (sc(b) < 0 ? 999 : sc(b)));
-  if (so === "name") list = [...list].sort((a, b) => a.name.localeCompare(b.name, "id"));
+  const list = filtered();
+  $("#tbFoot").textContent = list.length ? `Menampilkan ${list.length} dari ${base.length} peserta · klik baris untuk melihat detail` : "";
   $("#tb").innerHTML = list.length ? list.map(r => {
     const legacy = scored(r) && !isCur(r), c = scored(r) ? calc(r) : null, pct = Math.round((r.answered_count || 0) / E.total * 100), ev = evOf(r), fl = flOf(r).length, live = r.status === "in_progress";
-    return `<tr class="cl" data-id="${r.id}"><td><div class="b">${esc(r.name)}</div><div class="mut small">${esc(r.job_title)}${r.copart ? " · " + esc(r.copart) : ""}</div>
+    return `<tr class="cl" data-id="${r.id}"><td><a class="b rowlink" href="${href("list", r.id)}">${esc(r.name)}</a><div class="mut small">${esc(r.job_title)}${r.copart ? " · " + esc(r.copart) : ""}</div>
         ${violTxt(ev) ? `<div class="xs wtx" style="margin-top:2px">${violTxt(ev)}</div>` : ""}</td>
       <td><span class="badge ${live ? "b-in_progress" : "b-graded"}">${ST[r.status]}</span></td>
       <td>${legacy ? "—" : `<div class="pb"><div class="pbar"><i style="width:${pct}%"></i></div><span class="small">${r.answered_count || 0}/${E.total}</span></div>
@@ -144,7 +185,17 @@ function renderList() {
       <td class="small">${mins(r) !== null ? mins(r) + " mnt" : "—"}</td>
       <td class="nw">${c ? `<b>${c.total}</b><span class="mut small"> /100</span> ${passBadge(c)}<div class="xs mut">${c.cat}</div>` : legacy ? `<span class="mut small">Soal versi lama</span>` : "—"}</td></tr>`;
   }).join("") : `<tr><td colspan="7"><div class="empty">${base.length ? "Tidak ada peserta yang cocok dengan filter." : "Belum ada peserta. Bagikan kode batch untuk memulai."}</div></td></tr>`;
-  $$("tr.cl").forEach(tr => tr.onclick = () => openDet(tr.dataset.id));
+  $$("tr.cl").forEach(tr => tr.onclick = e => { if (!e.target.closest("a") && !getSelection().toString()) nav("list", tr.dataset.id); });
+}
+// daftar sesuai pencarian, filter status, dan urutan yang aktif (juga dipakai tombol sebelumnya/berikutnya di detail)
+function filtered() {
+  const q = $("#qs").value.toLowerCase(), so = $("#sort").value;
+  let list = batchRows().filter(r => (fsv === "all" || (fsv === "done" ? r.status !== "in_progress" : r.status === fsv)) && (r.name + " " + r.job_title + " " + (r.copart || "")).toLowerCase().includes(q));
+  const sc = r => scored(r) && isCur(r) ? calc(r).total : -1;
+  if (so === "score") list = [...list].sort((a, b) => sc(b) - sc(a));
+  if (so === "low") list = [...list].sort((a, b) => (sc(a) < 0 ? 999 : sc(a)) - (sc(b) < 0 ? 999 : sc(b)));
+  if (so === "name") list = [...list].sort((a, b) => a.name.localeCompare(b.name, "id"));
+  return list;
 }
 
 // ---- batch ----
@@ -182,7 +233,7 @@ async function batchAct(a, b, btn) {
   if (a === "code") return copy(b.code, btn);
   if (a === "link") return copy(pubUrl(b.code), btn);
   if (a === "edit") return openBatch(b);
-  if (a === "view") { go("list"); return setBf(b.id); }
+  if (a === "view") { bf = b.id; $("#fb").value = b.id; setXlsLabel(); return nav("list"); }
   if (a === "toggle") { const { error } = await sb.from("batches").update({ is_open: !b.is_open }).eq("id", b.id); if (error) return alert("Gagal: " + error.message); return load(); }
   if (a === "del") {
     if (!confirm(`Hapus batch "${b.copart}" (kode ${b.code})?\nData peserta tetap tersimpan, tetapi kode ini tidak bisa dipakai lagi.`)) return;
@@ -246,7 +297,8 @@ $("#fBatch").addEventListener("submit", async e => {
 
 // ---- detail peserta ----
 function openDet(id, keep) {
-  const a = rows.find(r => r.id === id); if (!a) return;
+  const a = rows.find(r => r.id === id);
+  if (!a) { cur = null; $("#vDet").innerHTML = `<div class="crumbs"><a href="${href("list")}">Peserta</a><span>/</span><span>Tidak ditemukan</span></div><div class="card empty"><h3 style="margin:0 0 6px;color:var(--ink)">Peserta tidak ditemukan</h3><p style="margin:0 0 16px">Data mungkin sudah dihapus.</p><a class="btn" href="${href("list")}">Kembali ke daftar</a></div>`; return; }
   const y = window.scrollY, filter = cur && cur.a.id === id ? cur.filter : "all";
   cur = { a, filter };
   $("#vList").hidden = true; $("#vDet").hidden = false; if (!keep) window.scrollTo(0, 0);
@@ -259,7 +311,11 @@ function openDet(id, keep) {
       + stat("Ragu-ragu", fl.length, "soal ditandai") + stat("Pelanggaran", viol(ev), viol(ev) ? "keluar halaman / layar penuh" : "tidak ada")
     : "";
   const rules = Object.entries(OPT_LABEL).filter(([k]) => s[k]).map(([, t]) => t).join(" · ") || "Standar";
-  $("#vDet").innerHTML = `<div style="padding:24px 0 10px"><button class="btn ghost sm" id="bBack">← Kembali</button></div>
+  const ids = filtered().map(r => r.id), pos = ids.indexOf(a.id), prev = pos > 0 ? ids[pos - 1] : null, next = pos >= 0 && pos < ids.length - 1 ? ids[pos + 1] : null;
+  $("#vDet").innerHTML = `<div class="crumbs"><a href="${href("list")}" title="Kembali ke daftar (Esc)">Peserta</a><span>/</span><span>${esc(a.name)}</span><div class="sp"></div>
+      ${pos >= 0 ? `<span class="xs mut">${pos + 1} dari ${ids.length}</span>` : ""}
+      ${prev ? `<a class="btn ghost sm" id="bPrev" href="${href("list", prev)}" title="Peserta sebelumnya (←)">Sebelumnya</a>` : ""}
+      ${next ? `<a class="btn ghost sm" id="bNext" href="${href("list", next)}" title="Peserta berikutnya (→)">Berikutnya</a>` : ""}</div>
     <div class="dhead"><div><h1>${esc(a.name)}</h1><p class="mut" style="margin:4px 0 0">${esc(a.job_title)}${a.copart ? " · " + esc(a.copart) : ""}${a.batch_id ? " · batch " + esc(bcode(a.batch_id)) : ""}</p></div>
       <span class="badge ${lock ? "b-in_progress" : "b-graded"}">${ST[a.status]}</span></div>
     ${legacy ? `<div class="alert"><b>Soal versi lama.</b> Peserta ini mengerjakan bank soal sebelumnya sehingga tidak dapat dinilai dengan kunci yang baru. Hapus bila hanya data uji.</div>` : ""}
@@ -268,7 +324,7 @@ function openDet(id, keep) {
       <div class="panel"><h3>Info pengerjaan</h3><dl class="kv">
         <dt>Mulai</dt><dd>${fmtD(a.started_at)}</dd><dt>Batas waktu</dt><dd>${fmtD(end)} <span class="mut small">(${dur} menit)</span></dd><dt>Dikirim</dt><dd>${fmtD(a.submitted_at)}</dd>
         <dt>Aktivitas terakhir</dt><dd>${fmtD(a.last_saved_at)}</dd>
-        <dt>Keluar halaman</dt><dd>${ev.blur ? `<span class="wtx">${ev.blur} kali · total ${away(ev.away)}</span> <span class="mut small">terakhir ${fmtD(ev.last)}</span>` : "Tidak pernah"}</dd>
+        <dt>Keluar halaman</dt><dd>${ev.blur ? `<span class="wtx">${ev.blur} kali · total ${away(ev.away)}</span>${ev.last ? ` <span class="mut small">terakhir ${fmtD(ev.last)}</span>` : ""}` : "Tidak pernah"}</dd>
         <dt>Keluar layar penuh</dt><dd>${ev.fs ? `<span class="wtx">${ev.fs} kali</span>` : "Tidak pernah"}${ev.nofs ? ` <span class="wtx small">· browser peserta tidak mendukung layar penuh</span>` : ""}</dd>
         <dt>Ragu-ragu</dt><dd>${fl.length ? fl.sort((x, y) => x - y).join(", ") + (s.shuffle_q ? ` <span class="mut small">(nomor bank soal)</span>` : "") : "—"}</dd>
         <dt>Aturan</dt><dd>${rules}</dd></dl></div>
@@ -284,9 +340,8 @@ function openDet(id, keep) {
     ${legacy ? "" : `<div class="bar" style="margin-top:28px"><h2 style="margin-right:auto">Jawaban</h2><div class="seg" id="pf"><button data-v="all">Semua</button><button data-v="wrong">Salah / kosong</button><button data-v="flag">Ragu-ragu</button></div></div>
       ${s.shuffle_opt ? `<div class="alert info">Pilihan jawaban diacak untuk peserta ini. Huruf di tabel mengikuti urutan bank soal (sama dengan kunci).</div>` : ""}<div id="pn"></div>`}
     <div style="display:flex;justify-content:flex-end;margin:24px 0 60px"><button class="btn danger sm" id="bDel">Hapus peserta</button></div>`;
-  $("#bBack").onclick = () => { cur = null; $("#vDet").hidden = true; $("#vList").hidden = false; renderList(); };
   $("#bDel").onclick = delAttempt;
-  if (lock) { $("#bAdd").onclick = addTime; $("#bForce").onclick = forceSubmit; } else $("#bSave").onclick = saveNote;
+  if (lock) { $("#bAdd").onclick = addTime; $("#bForce").onclick = forceSubmit; } else { $("#bSave").onclick = saveNote; $("#note").onchange = saveNote; }
   if (!legacy) {
     $$("#pf button").forEach(x => x.classList.toggle("on", x.dataset.v === cur.filter));
     $("#pf").onclick = e => { const x = e.target.closest("button"); if (!x) return; cur.filter = x.dataset.v; $$("#pf button").forEach(z => z.classList.toggle("on", z === x)); panel(); };
@@ -349,7 +404,7 @@ async function delAttempt() {
   if (!confirm("Hapus peserta ini beserta seluruh jawabannya? Tindakan ini tidak dapat dibatalkan.")) return;
   const { error } = await sb.from("attempts").delete().eq("id", cur.a.id);
   if (error) return alert("Gagal menghapus: " + error.message);
-  rows = rows.filter(r => r.id !== cur.a.id); $("#bBack").click();
+  rows = rows.filter(r => r.id !== cur.a.id); nav("list");
 }
 
 // ---- analisis soal ----

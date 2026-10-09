@@ -98,6 +98,8 @@ Durasi, pengacakan, dan wajib jawab semua disalin ke data peserta saat ia meneka
 - Pengingat otomatis saat sisa waktu 10, 5, dan 1 menit.
 
 ## Fitur konsol trainer
+- **Navigasi**: menu samping (Peserta, Batch, Analisis soal) dengan pilihan **Batch** di bagian atas yang berlaku untuk halaman Peserta dan Analisis. Setiap halaman punya alamat sendiri (mis. `admin.html#/peserta/<id>?batch=<id>`), sehingga tombol Back/Forward browser, refresh, dan berbagi tautan ke peserta tertentu tetap berfungsi. Kembali dari detail mengembalikan posisi daftar.
+- **Detail peserta** memiliki breadcrumb serta tombol **Sebelumnya / Berikutnya** sesuai urutan dan filter daftar. Pintasan: `/` cari peserta, `Esc` kembali ke daftar, `←` `→` pindah peserta. Catatan trainer tersimpan otomatis saat kolom ditinggalkan.
 - **Peserta**: statistik (termasuk tingkat kelulusan), pencarian, filter status, urutan (terbaru / nilai / nama), sisa waktu peserta yang sedang mengerjakan, dan catatan keluar halaman / layar penuh.
 - **Detail peserta yang sedang mengerjakan**: **Tambah waktu** (+5/+10/+15/+30 menit; timer peserta diperbarui otomatis dalam ±30 detik) dan **Kirim paksa** (jawaban yang sudah tersinkron dikirim dan dinilai).
 - **Detail peserta selesai**: nilai, status lulus, rincian per area, filter jawaban (semua / salah-kosong / ragu-ragu), catatan trainer.

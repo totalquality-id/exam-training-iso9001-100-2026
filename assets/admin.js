@@ -1,5 +1,5 @@
 (() => {
-const E = window.EXAM, CFG = window.APP_CONFIG, ic = window.ic, L = "ABCD";
+const E = window.EXAM, CFG = window.APP_CONFIG, L = "ABCD";
 const $ = s => document.querySelector(s), $$ = s => document.querySelectorAll(s);
 const esc = s => String(s ?? "").replace(/[&<>"]/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));
 const view = id => document.querySelectorAll(".view").forEach(v => v.hidden = v.id !== id);
@@ -7,21 +7,19 @@ const ST = { in_progress: "Mengerjakan", submitted: "Selesai", graded: "Selesai"
 const REM = { CTX: "Workshop 2 — Context & Climate Relevance Lab", LDR: "Workshop 3 — Quality Culture Challenge", "R&O": "Workshop 4 — Risk & Opportunity War Room", SUP: "Workshop 5 — Knowledge Risk Map", OPS: "Workshop 6 — Customer Promise Challenge" };
 const fmtD = d => d ? new Date(d).toLocaleString("id-ID", { dateStyle: "short", timeStyle: "short" }) : "—";
 const mins = a => a.submitted_at ? Math.round((new Date(a.submitted_at) - new Date(a.started_at)) / 6000) / 10 : null;
-const initials = n => String(n || "?").trim().split(/\s+/).slice(0, 2).map(w => w[0]).join("").toUpperCase();
 const num = v => v === null || v === undefined || v === "" || isNaN(+v) ? null : +v;
 const toLocal = d => { if (!d) return ""; const x = new Date(d); x.setMinutes(x.getMinutes() - x.getTimezoneOffset()); return x.toISOString().slice(0, 16); };
 const fromLocal = v => v ? new Date(v).toISOString() : null;
 
-// Aturan ujian yang dapat diatur per batch
+// Aturan ujian yang dapat diatur per batch. Mode layar penuh, anti-salin, dan pencatatan keluar halaman selalu aktif.
 const OPTS = [
-  ["shuffle_q", "Acak urutan soal", "Urutan soal diacak di dalam tiap bagian, berbeda untuk setiap peserta. Nomor yang tampil tetap berurutan."],
-  ["shuffle_opt", "Acak pilihan jawaban", "Urutan pilihan A–D diacak per peserta. Pilihan seperti “Semua benar” tetap di posisinya."],
-  ["show_score", "Tampilkan nilai ke peserta", "Setelah mengirim, peserta melihat nilai, jumlah benar, dan status lulus. Kunci jawaban tetap tidak ditampilkan."],
-  ["require_all", "Wajib menjawab semua soal", "Tombol kirim terkunci sampai semua soal terjawab. Saat waktu habis jawaban tetap terkirim otomatis."],
-  ["track_focus", "Catat perpindahan tab / aplikasi", "Peserta diberi tahu di awal; jumlah dan lama keluar dari halaman ujian tampil di konsol ini."],
+  ["shuffle_q", "Acak urutan soal", "Diacak di dalam tiap bagian, berbeda untuk setiap peserta. Nomor yang tampil tetap berurutan."],
+  ["shuffle_opt", "Acak pilihan jawaban", "Urutan A–D diacak per peserta. Pilihan seperti “Semua benar” tetap di posisinya."],
+  ["show_score", "Tampilkan nilai ke peserta", "Setelah mengirim, peserta melihat nilai dan status lulus. Kunci jawaban tidak ditampilkan."],
+  ["require_all", "Wajib menjawab semua soal", "Kirim terkunci sampai semua soal terjawab. Saat waktu habis tetap terkirim otomatis."],
 ];
-const DEF = { shuffle_q: false, shuffle_opt: true, show_score: false, require_all: false, track_focus: true, pass_mark: 70 };
-const OPT_CHIP = { shuffle_q: ["shuffle", "Acak soal"], shuffle_opt: ["shuffle", "Acak pilihan"], show_score: ["eye", "Nilai tampil"], require_all: ["check", "Wajib semua"], track_focus: ["monitor", "Pantau tab"] };
+const DEF = { shuffle_q: false, shuffle_opt: true, show_score: false, require_all: false, pass_mark: 70 };
+const OPT_LABEL = { shuffle_q: "Acak soal", shuffle_opt: "Acak pilihan", show_score: "Nilai ditampilkan", require_all: "Wajib jawab semua" };
 
 // peta pertanyaan: nomor -> {text, opts}
 const Q = {};
@@ -48,7 +46,7 @@ async function enter(email) {
   if (!cfg || cfg.version !== E.version || !cfg.mc) { await sb.auth.signOut(); view("vLogin"); $("#lErr").textContent = "Kunci jawaban di database belum sesuai dengan bank soal baru. Jalankan supabase/update_questions.sql di Supabase → SQL Editor, lalu login ulang."; return; }
   const probe = await sb.from("batches").select("settings,open_from,open_until").limit(1);
   hasSettings = !probe.error;
-  $("#me").textContent = email; $("#meA").textContent = initials(email.split("@")[0].replace(/[._-]+/g, " "));
+  $("#me").textContent = email;
   view("vApp"); await load(); poll = setInterval(load, 10000);
 }
 $("#bOut").onclick = async () => { clearInterval(poll); await sb.auth.signOut(); location.reload(); };
@@ -68,11 +66,11 @@ function go(p) {
 const batchRows = () => bf === "all" ? rows : bf === "none" ? rows.filter(r => !r.batch_id) : rows.filter(r => r.batch_id === bf);
 const bOf = id => batches.find(b => b.id === id);
 const bcode = id => (bOf(id) || {}).code || "";
-const setXlsLabel = () => $("#bXlsT").textContent = bf === "all" ? "Ekspor Excel (semua)" : "Ekspor Excel (batch ini)";
+const setXlsLabel = () => $("#bXls").textContent = bf === "all" ? "Ekspor Excel" : "Ekspor Excel (batch ini)";
 const pubUrl = code => new URL("./?kode=" + code, location.href).href;
 const copy = async (t, btn) => {
   try { await navigator.clipboard.writeText(t); } catch { prompt("Salin teks berikut:", t); return; }
-  const o = btn.innerHTML; btn.innerHTML = ic("check") + (btn.classList.contains("icon") ? "" : "Tersalin"); setTimeout(() => btn.innerHTML = o, 1400);
+  const o = btn.textContent; btn.textContent = "Tersalin"; setTimeout(() => btn.textContent = o, 1400);
 };
 
 async function load() {
@@ -81,7 +79,7 @@ async function load() {
     sb.from("batches").select("*").order("created_at", { ascending: false })]);
   if (a.error) return $("#upd").textContent = "Gagal memuat: " + a.error.message;
   rows = a.data; batches = b.data || [];
-  $("#upd").textContent = b.error ? "Jalankan supabase/batch.sql terlebih dahulu" : "Diperbarui " + new Date().toLocaleTimeString("id-ID", { hour: "2-digit", minute: "2-digit", second: "2-digit" });
+  $("#upd").textContent = b.error ? "Jalankan supabase/batch.sql terlebih dahulu" : "Diperbarui " + new Date().toLocaleTimeString("id-ID", { hour: "2-digit", minute: "2-digit" });
   renderBatchFilter();
   if (!$("#pgList").hidden) renderList(); if (!$("#pgBatch").hidden) renderBatches(); if (!$("#pgAnal").hidden && !$("#vList").hidden) renderAnal();
   if (cur) {
@@ -104,6 +102,8 @@ const evOf = a => (a.answers || {}).ev || {};
 const flOf = a => ((a.answers || {}).fl || []).map(Number);
 const leftMin = a => Math.max(0, Math.ceil((new Date(a.started_at).getTime() + (a.duration_minutes || E.minutes) * 60000 - Date.now()) / 60000));
 const away = s => s >= 60 ? Math.round(s / 60) + " mnt" : (s || 0) + " dtk";
+const viol = ev => (ev.blur || 0) + (ev.fs || 0);
+const violTxt = ev => [ev.blur ? `${ev.blur}× keluar halaman` : "", ev.fs ? `${ev.fs}× keluar layar penuh` : "", ev.nofs ? "tanpa layar penuh" : ""].filter(Boolean).join(" · ");
 function calc(a) {
   if (!isCur(a)) return null;
   const mc = (a.answers || {}).mc || {}, comp = {}, N = Object.keys(cfg.mc).length; let right = 0;
@@ -115,18 +115,18 @@ function calc(a) {
   return { total, right, N, comp, cat: cat(total), pass: total >= pm, pm };
 }
 const passBadge = c => `<span class="badge ${c.pass ? "b-ok" : "b-bad"}">${c.pass ? "Lulus" : "Belum lulus"}</span>`;
-const stat = (label, value, icon, sub, cls, hl) => `<div class="stat${hl ? " hl" : ""}"><div class="si ${cls || ""}">${ic(icon)}</div><span>${label}</span><b>${value}</b>${sub ? `<small>${sub}</small>` : ""}</div>`;
+const stat = (label, value, sub, hl) => `<div class="stat${hl ? " hl" : ""}"><span>${label}</span><b>${value}</b>${sub ? `<small>${sub}</small>` : ""}</div>`;
 
 // ---- daftar peserta ----
 function renderList() {
   const base = batchRows(), fin = base.filter(r => scored(r) && isCur(r)), cs = fin.map(calc);
   const avg = cs.length ? (cs.reduce((t, c) => t + c.total, 0) / cs.length).toFixed(1) : "—", top = cs.length ? Math.max(...cs.map(c => c.total)) : null;
   const passN = cs.filter(c => c.pass).length, prog = base.filter(r => r.status === "in_progress").length;
-  $("#stats").innerHTML = stat("Total peserta", base.length, "users", `${fin.length} sudah dinilai`)
-    + stat("Mengerjakan", prog, "clock", prog ? "sedang berlangsung" : "tidak ada yang aktif", "w")
-    + stat("Selesai", base.length - prog, "check", base.length ? Math.round((base.length - prog) / base.length * 100) + "% dari peserta" : "", "o")
-    + stat("Rata-rata nilai", avg, "chart", top !== null ? "tertinggi " + top : "")
-    + stat("Tingkat kelulusan", cs.length ? Math.round(passN / cs.length * 100) + "%" : "—", "award", cs.length ? `${passN} dari ${cs.length} lulus` : "belum ada nilai", "", true);
+  $("#stats").innerHTML = stat("Total peserta", base.length, `${fin.length} sudah dinilai`)
+    + stat("Mengerjakan", prog, prog ? "sedang berlangsung" : "tidak ada yang aktif")
+    + stat("Selesai", base.length - prog, base.length ? Math.round((base.length - prog) / base.length * 100) + "% dari peserta" : "")
+    + stat("Rata-rata nilai", avg, top !== null ? "tertinggi " + top : "", true)
+    + stat("Kelulusan", cs.length ? Math.round(passN / cs.length * 100) + "%" : "—", cs.length ? `${passN} dari ${cs.length} lulus` : "belum ada nilai", true);
   const q = $("#qs").value.toLowerCase(), so = $("#sort").value;
   let list = base.filter(r => (fsv === "all" || (fsv === "done" ? r.status !== "in_progress" : r.status === fsv)) && (r.name + " " + r.job_title + " " + (r.copart || "")).toLowerCase().includes(q));
   const sc = r => scored(r) && isCur(r) ? calc(r).total : -1;
@@ -135,15 +135,15 @@ function renderList() {
   if (so === "name") list = [...list].sort((a, b) => a.name.localeCompare(b.name, "id"));
   $("#tb").innerHTML = list.length ? list.map(r => {
     const legacy = scored(r) && !isCur(r), c = scored(r) ? calc(r) : null, pct = Math.round((r.answered_count || 0) / E.total * 100), ev = evOf(r), fl = flOf(r).length, live = r.status === "in_progress";
-    return `<tr class="cl" data-id="${r.id}"><td><div class="pname"><div class="avatar">${esc(initials(r.name))}</div><div><div class="b">${esc(r.name)}</div><div class="mut small">${esc(r.job_title)}${r.copart ? " · " + esc(r.copart) : ""}</div>
-        ${ev.blur ? `<span class="chip warn" style="margin-top:4px" title="Keluar dari halaman ujian ${ev.blur} kali, total ${away(ev.away)}">${ic("monitor")}${ev.blur}× keluar tab</span>` : ""}</div></div></td>
+    return `<tr class="cl" data-id="${r.id}"><td><div class="b">${esc(r.name)}</div><div class="mut small">${esc(r.job_title)}${r.copart ? " · " + esc(r.copart) : ""}</div>
+        ${violTxt(ev) ? `<div class="xs wtx" style="margin-top:2px">${violTxt(ev)}</div>` : ""}</td>
       <td><span class="badge ${live ? "b-in_progress" : "b-graded"}">${ST[r.status]}</span></td>
       <td>${legacy ? "—" : `<div class="pb"><div class="pbar"><i style="width:${pct}%"></i></div><span class="small">${r.answered_count || 0}/${E.total}</span></div>
-        ${live ? `<div class="xs mut" style="margin-top:4px">${ic("clock")} sisa ${leftMin(r)} mnt${fl ? ` · ${fl} ragu-ragu` : ""}</div>` : ""}`}</td>
+        ${live ? `<div class="xs mut" style="margin-top:4px">Sisa ${leftMin(r)} mnt${fl ? ` · ${fl} ragu-ragu` : ""}</div>` : ""}`}</td>
       <td class="small">${fmtD(r.started_at)}</td><td class="small">${fmtD(r.submitted_at || r.last_saved_at)}</td>
       <td class="small">${mins(r) !== null ? mins(r) + " mnt" : "—"}</td>
-      <td class="nw">${c ? `<b style="font-size:16px">${c.total}</b><span class="mut small"> /100</span> ${passBadge(c)}<div class="xs mut">${c.cat}</div>` : legacy ? `<span class="mut small">Soal versi lama</span>` : "—"}</td></tr>`;
-  }).join("") : `<tr><td colspan="7"><div class="empty">${ic("users")}<div>${base.length ? "Tidak ada peserta yang cocok dengan filter." : "Belum ada peserta. Bagikan kode batch untuk memulai."}</div></div></td></tr>`;
+      <td class="nw">${c ? `<b>${c.total}</b><span class="mut small"> /100</span> ${passBadge(c)}<div class="xs mut">${c.cat}</div>` : legacy ? `<span class="mut small">Soal versi lama</span>` : "—"}</td></tr>`;
+  }).join("") : `<tr><td colspan="7"><div class="empty">${base.length ? "Tidak ada peserta yang cocok dengan filter." : "Belum ada peserta. Bagikan kode batch untuk memulai."}</div></td></tr>`;
   $$("tr.cl").forEach(tr => tr.onclick = () => openDet(tr.dataset.id));
 }
 
@@ -156,25 +156,25 @@ function bState(b) {
   return ["Dibuka", "b-ok"];
 }
 function renderBatches() {
-  $("#bWarn").innerHTML = hasSettings ? "" : `<div class="alert">${ic("alert")}<div><b>Pengaturan ujian belum aktif.</b> Jalankan <code>supabase/settings.sql</code> di Supabase → SQL Editor (aman diulang) untuk mengaktifkan jadwal, pengacakan, nilai lulus, tampilkan nilai, dan pencatatan tab. Setelah itu muat ulang halaman ini.</div></div>`;
+  $("#bWarn").innerHTML = hasSettings ? "" : `<div class="alert"><b>Pengaturan ujian belum aktif.</b> Jalankan <code>supabase/settings.sql</code> di Supabase → SQL Editor untuk mengaktifkan jadwal, pengacakan, nilai lulus, dan tampilkan nilai. Setelah itu muat ulang halaman ini.</div>`;
   $("#bt").innerHTML = batches.length ? batches.map(b => {
     const p = rows.filter(r => r.batch_id === b.id), sub = p.filter(r => r.status !== "in_progress"), cs = sub.filter(isCur).map(calc);
     const avg = cs.length ? (cs.reduce((t, c) => t + c.total, 0) / cs.length).toFixed(1) : "—", s = b.settings || {}, [stT, stC] = bState(b);
-    const chips = [`<span class="chip on">${ic("clock")}${b.duration_minutes || E.minutes} mnt</span>`];
+    const spec = [`${b.duration_minutes || E.minutes} menit`];
     if (hasSettings) {
-      chips.push(`<span class="chip">${ic("award")}Lulus ≥ ${num(s.pass_mark) ?? 70}</span>`);
-      Object.entries(OPT_CHIP).forEach(([k, [i, t]]) => s[k] && chips.push(`<span class="chip">${ic(i)}${t}</span>`));
-      if (b.open_from || b.open_until) chips.push(`<span class="chip">${ic("calendar")}${b.open_from ? fmtD(b.open_from) : "…"} – ${b.open_until ? fmtD(b.open_until) : "…"}</span>`);
+      spec.push(`lulus ≥ ${num(s.pass_mark) ?? 70}`);
+      Object.entries(OPT_LABEL).forEach(([k, t]) => s[k] && spec.push(t.toLowerCase()));
     }
+    const sched = hasSettings && (b.open_from || b.open_until) ? `<div class="specs">Jadwal: ${b.open_from ? fmtD(b.open_from) : "…"} – ${b.open_until ? fmtD(b.open_until) : "…"}</div>` : "";
     return `<div class="bc ${b.is_open ? "" : "off"}">
       <div class="bc-top"><div><h3>${esc(b.copart)}</h3><p>${b.note ? esc(b.note) : "Dibuat " + fmtD(b.created_at)}</p></div><span class="badge ${stC}">${stT}</span></div>
-      <div class="bc-code"><span class="code">${esc(b.code)}</span><button class="btn ghost sm icon" data-a="code" data-id="${b.id}" title="Salin kode">${ic("copy")}</button><button class="btn ghost sm icon" data-a="link" data-id="${b.id}" title="Salin tautan peserta">${ic("link")}</button></div>
-      <div class="bc-meta"><div class="chips">${chips.join("")}</div></div>
+      <div class="bc-code"><span class="code">${esc(b.code)}</span><div class="sp"></div><button class="btn ghost sm" data-a="code" data-id="${b.id}">Salin kode</button><button class="btn ghost sm" data-a="link" data-id="${b.id}">Salin tautan</button></div>
+      <div class="specs">${spec.join(" · ")}</div>${sched}
       <div class="bc-stats"><div><b>${p.length}</b><span>Peserta</span></div><div><b>${sub.length}</b><span>Sudah kirim</span></div><div><b>${avg}</b><span>Rata-rata</span></div></div>
-      <div class="bc-act"><button class="btn soft sm" data-a="view" data-id="${b.id}">${ic("users")}Peserta</button><button class="btn ghost sm" data-a="edit" data-id="${b.id}">${ic("sliders")}Pengaturan</button>
-        <button class="btn ghost sm" data-a="toggle" data-id="${b.id}">${ic(b.is_open ? "lock" : "unlock")}${b.is_open ? "Tutup" : "Buka"}</button><div class="sp"></div>
-        <button class="btn danger sm icon" data-a="del" data-id="${b.id}" title="Hapus batch">${ic("trash")}</button></div></div>`;
-  }).join("") : `<div class="card empty" style="grid-column:1/-1">${ic("layers")}<h3 style="margin:4px 0 6px;color:var(--ink)">Belum ada batch</h3><p style="margin:0 0 16px">Buat batch pertama untuk mendapatkan kode 6 angka yang dibagikan ke peserta.</p><button class="btn" data-a="new">${ic("plus")}Buat Batch</button></div>`;
+      <div class="bc-act"><button class="btn soft sm" data-a="view" data-id="${b.id}">Lihat peserta</button><button class="btn ghost sm" data-a="edit" data-id="${b.id}">Pengaturan</button>
+        <button class="btn ghost sm" data-a="toggle" data-id="${b.id}">${b.is_open ? "Tutup" : "Buka"}</button><div class="sp"></div>
+        <button class="btn danger sm" data-a="del" data-id="${b.id}">Hapus</button></div></div>`;
+  }).join("") : `<div class="card empty" style="grid-column:1/-1"><h3 style="margin:0 0 6px;color:var(--ink)">Belum ada batch</h3><p style="margin:0 0 16px">Buat batch untuk mendapatkan kode 6 angka yang dibagikan ke peserta.</p><button class="btn" data-a="new">Buat Batch</button></div>`;
   $$("#bt button[data-a]").forEach(btn => btn.onclick = () => batchAct(btn.dataset.a, bOf(btn.dataset.id), btn));
 }
 async function batchAct(a, b, btn) {
@@ -197,18 +197,18 @@ $("#presets").onclick = e => { const b = e.target.closest("button"); if (b) { $(
 $("#bnMin").oninput = syncPresets;
 function openBatch(b) {
   editId = b ? b.id : null;
-  const s = Object.assign({}, DEF, b ? Object.assign({ shuffle_opt: false, track_focus: false }, b.settings || {}) : {});
+  const s = Object.assign({}, DEF, b ? Object.assign({ shuffle_opt: false }, b.settings || {}) : {});
   $("#mbTitle").textContent = b ? "Pengaturan Batch" : "Batch Baru";
-  $("#mbSub").textContent = b ? `${b.copart} · kode ${b.code}` : "Kode 6 angka dibuat otomatis dan dibagikan ke peserta.";
+  $("#mbSub").textContent = b ? `${b.copart} · kode ${b.code}` : "Kode 6 angka dibuat otomatis.";
   $("#bnName").value = b ? b.copart : ""; $("#bnNote").value = b ? b.note || "" : "";
   $("#bnMin").value = b ? b.duration_minutes || E.minutes : E.minutes; $("#bnPass").value = num(s.pass_mark) ?? 70;
   $("#bnFrom").value = b ? toLocal(b.open_from) : ""; $("#bnUntil").value = b ? toLocal(b.open_until) : "";
   OPTS.forEach(([k]) => { const el = $("#o_" + k); el.checked = !!s[k]; el.disabled = !hasSettings; });
   ["#bnPass", "#bnFrom", "#bnUntil"].forEach(id => $(id).disabled = !hasSettings);
-  $("#mbNote").innerHTML = ic("info") + `<span>${!hasSettings ? "Jadwal, nilai lulus, dan aturan ujian memerlukan <code>supabase/settings.sql</code>. Saat ini hanya nama, keterangan, dan durasi yang disimpan."
-    : b ? "Durasi, pengacakan, wajib jawab semua, dan pencatatan tab berlaku untuk peserta yang <b>mulai setelah</b> perubahan disimpan. Nilai lulus, tampilkan nilai, dan jadwal berlaku langsung."
-    : "Semua pengaturan dapat diubah nanti lewat tombol <b>Pengaturan</b> pada kartu batch."}</span>`;
-  $("#bnAdd").textContent = b ? "Simpan Perubahan" : "Buat Batch"; $("#bnErr").textContent = "";
+  $("#mbNote").innerHTML = !hasSettings ? "Jadwal, nilai lulus, dan aturan ujian memerlukan <code>supabase/settings.sql</code>. Saat ini hanya nama, keterangan, dan durasi yang disimpan."
+    : (b ? "Durasi, pengacakan, dan wajib jawab semua berlaku untuk peserta yang mulai setelah perubahan disimpan. Nilai lulus, tampilkan nilai, dan jadwal berlaku langsung. " : "")
+      + "Mode layar penuh, perlindungan salin, dan pencatatan keluar halaman selalu aktif.";
+  $("#bnAdd").textContent = b ? "Simpan" : "Buat Batch"; $("#bnErr").textContent = "";
   syncPresets(); $("#mBatch").hidden = false; $("#bnName").focus();
 }
 const closeBatch = () => $("#mBatch").hidden = true;
@@ -222,7 +222,8 @@ $("#fBatch").addEventListener("submit", async e => {
   if (!Number.isInteger(min) || min < 5 || min > 600) return err("Durasi harus berupa bilangan bulat antara 5 dan 600 menit.");
   if (hasSettings && (!Number.isFinite(pm) || pm < 0 || pm > 100)) return err("Nilai minimal lulus harus antara 0 dan 100.");
   if (hasSettings && from && until && new Date(until) <= new Date(from)) return err("Waktu tutup harus setelah waktu buka.");
-  const settings = { pass_mark: pm }; OPTS.forEach(([k]) => settings[k] = $("#o_" + k).checked);
+  const prev = editId ? (bOf(editId) || {}).settings || {} : {};
+  const settings = Object.assign({}, prev, { pass_mark: pm }); OPTS.forEach(([k]) => settings[k] = $("#o_" + k).checked);
   $("#bnAdd").disabled = true;
   let data, error;
   if (editId) {
@@ -236,8 +237,8 @@ $("#fBatch").addEventListener("submit", async e => {
   if (error) return err("Gagal menyimpan: " + error.message + (/function|p_settings|p_minutes|schema cache|column/i.test(error.message) ? " — jalankan ulang supabase/batch.sql dan supabase/settings.sql di SQL Editor." : ""));
   closeBatch();
   if (!editId) {
-    $("#bnOk").innerHTML = `<div class="newcode"><div><div class="small mut">Batch dibuat untuk <b>${esc(data.copart)}</b> (durasi ${data.duration_minutes} menit). Bagikan kode ini ke peserta:</div><div class="code" style="margin-top:8px">${esc(data.code)}</div></div>
-      <div class="sp"></div><button class="btn ghost sm" id="ncCode">${ic("copy")}Salin kode</button><button class="btn ghost sm" id="ncLink">${ic("link")}Salin tautan</button><button class="m-x" id="ncX" title="Tutup">${ic("x")}</button></div>`;
+    $("#bnOk").innerHTML = `<div class="newcode"><div><div class="small mut">Batch dibuat untuk <b>${esc(data.copart)}</b> (${data.duration_minutes} menit). Bagikan kode ini ke peserta:</div><div class="code" style="margin-top:8px">${esc(data.code)}</div></div>
+      <div class="sp"></div><button class="btn ghost sm" id="ncCode">Salin kode</button><button class="btn ghost sm" id="ncLink">Salin tautan</button><button class="btn ghost sm" id="ncX">Tutup</button></div>`;
     $("#ncCode").onclick = e => copy(data.code, e.currentTarget); $("#ncLink").onclick = e => copy(pubUrl(data.code), e.currentTarget); $("#ncX").onclick = () => $("#bnOk").innerHTML = "";
   }
   load();
@@ -249,39 +250,40 @@ function openDet(id, keep) {
   const y = window.scrollY, filter = cur && cur.a.id === id ? cur.filter : "all";
   cur = { a, filter };
   $("#vList").hidden = true; $("#vDet").hidden = false; if (!keep) window.scrollTo(0, 0);
-  const lock = a.status === "in_progress", legacy = scored(a) && !isCur(a), c = scored(a) ? calc(a) : null, ev = evOf(a), fl = flOf(a), s = a.settings || {}, b = bOf(a.batch_id);
+  const lock = a.status === "in_progress", legacy = scored(a) && !isCur(a), c = scored(a) ? calc(a) : null, ev = evOf(a), fl = flOf(a), s = a.settings || {};
   const dur = a.duration_minutes || E.minutes, end = new Date(new Date(a.started_at).getTime() + dur * 60000);
   const cards = c
-    ? stat("Nilai", `${c.total}<small> /100</small>`, "award", c.cat, "", true) + stat("Jawaban benar", `${c.right}<small> /${c.N}</small>`, "check", `${a.answered_count || 0} dari ${E.total} terjawab`, "o")
-      + stat("Status kelulusan", c.pass ? "Lulus" : "Belum", "target", `nilai lulus ${c.pm}`, c.pass ? "o" : "w") + stat("Durasi", mins(a) !== null ? mins(a) + "<small> mnt</small>" : "—", "clock", `dari ${dur} menit`)
-    : lock ? stat("Terjawab", `${a.answered_count || 0}<small> /${E.total}</small>`, "check", Math.round((a.answered_count || 0) / E.total * 100) + "% selesai", "", true) + stat("Sisa waktu", `${leftMin(a)}<small> mnt</small>`, "clock", "berakhir " + end.toLocaleTimeString("id-ID", { hour: "2-digit", minute: "2-digit" }), "w")
-      + stat("Ragu-ragu", fl.length, "flag", "soal ditandai") + stat("Keluar tab", ev.blur || 0, "monitor", ev.blur ? "total " + away(ev.away) : s.track_focus ? "dipantau" : "tidak dipantau", ev.blur ? "w" : "")
+    ? stat("Nilai", `${c.total}<small> /100</small>`, c.cat, true) + stat("Jawaban benar", `${c.right}<small> /${c.N}</small>`, `${a.answered_count || 0} dari ${E.total} terjawab`)
+      + stat("Kelulusan", c.pass ? "Lulus" : "Belum lulus", `nilai lulus ${c.pm}`) + stat("Durasi", mins(a) !== null ? mins(a) + "<small> mnt</small>" : "—", `dari ${dur} menit`)
+    : lock ? stat("Terjawab", `${a.answered_count || 0}<small> /${E.total}</small>`, Math.round((a.answered_count || 0) / E.total * 100) + "% selesai", true) + stat("Sisa waktu", `${leftMin(a)}<small> mnt</small>`, "berakhir " + end.toLocaleTimeString("id-ID", { hour: "2-digit", minute: "2-digit" }))
+      + stat("Ragu-ragu", fl.length, "soal ditandai") + stat("Pelanggaran", viol(ev), viol(ev) ? "keluar halaman / layar penuh" : "tidak ada")
     : "";
-  const setChips = Object.entries(OPT_CHIP).filter(([k]) => s[k]).map(([, [i, t]]) => `<span class="chip">${ic(i)}${t}</span>`).join("") || `<span class="mut small">Standar (tanpa pengacakan)</span>`;
-  $("#vDet").innerHTML = `<div style="padding:24px 0 8px"><button class="btn ghost sm" id="bBack">${ic("back")}Kembali</button></div>
-    <div class="dhead"><div class="pname"><div class="avatar">${esc(initials(a.name))}</div><div><h1>${esc(a.name)}</h1><p class="mut" style="margin:4px 0 0">${esc(a.job_title)}${a.copart ? " · " + esc(a.copart) : ""}${a.batch_id ? " · batch " + esc(bcode(a.batch_id)) : ""}</p></div></div>
+  const rules = Object.entries(OPT_LABEL).filter(([k]) => s[k]).map(([, t]) => t).join(" · ") || "Standar";
+  $("#vDet").innerHTML = `<div style="padding:24px 0 10px"><button class="btn ghost sm" id="bBack">← Kembali</button></div>
+    <div class="dhead"><div><h1>${esc(a.name)}</h1><p class="mut" style="margin:4px 0 0">${esc(a.job_title)}${a.copart ? " · " + esc(a.copart) : ""}${a.batch_id ? " · batch " + esc(bcode(a.batch_id)) : ""}</p></div>
       <span class="badge ${lock ? "b-in_progress" : "b-graded"}">${ST[a.status]}</span></div>
-    ${legacy ? `<div class="alert">${ic("alert")}<div><b>Soal versi lama.</b> Peserta ini mengerjakan bank soal sebelumnya (format campuran), sehingga tidak dapat dinilai dengan kunci yang baru. Datanya tetap tersimpan; hapus bila hanya data uji.</div></div>` : ""}
+    ${legacy ? `<div class="alert"><b>Soal versi lama.</b> Peserta ini mengerjakan bank soal sebelumnya sehingga tidak dapat dinilai dengan kunci yang baru. Hapus bila hanya data uji.</div>` : ""}
     <div class="dgrid">${cards}</div>
     <div class="two">
-      <div class="panel"><h3>${ic("list")}Info pengerjaan</h3><dl class="kv">
+      <div class="panel"><h3>Info pengerjaan</h3><dl class="kv">
         <dt>Mulai</dt><dd>${fmtD(a.started_at)}</dd><dt>Batas waktu</dt><dd>${fmtD(end)} <span class="mut small">(${dur} menit)</span></dd><dt>Dikirim</dt><dd>${fmtD(a.submitted_at)}</dd>
         <dt>Aktivitas terakhir</dt><dd>${fmtD(a.last_saved_at)}</dd>
-        <dt>Keluar tab</dt><dd>${ev.blur ? `<span class="chip warn">${ic("monitor")}${ev.blur} kali · total ${away(ev.away)}</span> <span class="mut small">terakhir ${fmtD(ev.last)}</span>` : s.track_focus ? "Tidak pernah" : `<span class="mut">Tidak dipantau</span>`}</dd>
+        <dt>Keluar halaman</dt><dd>${ev.blur ? `<span class="wtx">${ev.blur} kali · total ${away(ev.away)}</span> <span class="mut small">terakhir ${fmtD(ev.last)}</span>` : "Tidak pernah"}</dd>
+        <dt>Keluar layar penuh</dt><dd>${ev.fs ? `<span class="wtx">${ev.fs} kali</span>` : "Tidak pernah"}${ev.nofs ? ` <span class="wtx small">· browser peserta tidak mendukung layar penuh</span>` : ""}</dd>
         <dt>Ragu-ragu</dt><dd>${fl.length ? fl.sort((x, y) => x - y).join(", ") + (s.shuffle_q ? ` <span class="mut small">(nomor bank soal)</span>` : "") : "—"}</dd>
-        <dt>Aturan</dt><dd><div class="chips">${setChips}</div></dd></dl></div>
-      ${lock ? `<div class="panel"><h3>${ic("sliders")}Kontrol trainer</h3>
-        <label class="f" style="margin-top:0">Tambah waktu</label><div class="ctrl"><select id="addMin"><option value="5">+5 menit</option><option value="10" selected>+10 menit</option><option value="15">+15 menit</option><option value="30">+30 menit</option></select><button class="btn ghost" id="bAdd">${ic("plus")}Tambah</button></div>
+        <dt>Aturan</dt><dd>${rules}</dd></dl></div>
+      ${lock ? `<div class="panel"><h3>Kontrol trainer</h3>
+        <label class="f" style="margin-top:0">Tambah waktu</label><div class="ctrl"><select id="addMin"><option value="5">+5 menit</option><option value="10" selected>+10 menit</option><option value="15">+15 menit</option><option value="30">+30 menit</option></select><button class="btn ghost" id="bAdd">Tambah</button></div>
         <p class="hint">Timer peserta diperbarui otomatis dalam ±30 detik.</p>
-        <label class="f">Akhiri pengerjaan</label><button class="btn danger" id="bForce">${ic("send")}Kirim paksa sekarang</button>
-        <p class="hint">Jawaban yang sudah tersinkron dikirim dan dinilai. Peserta tidak dapat mengubahnya lagi.</p><div class="small" id="ctlMsg"></div></div>`
-      : `<div class="panel"><h3>${ic("edit")}Catatan trainer</h3><textarea id="note" placeholder="Catatan untuk peserta ini…">${esc(a.trainer_notes || "")}</textarea>
-        <div style="display:flex;gap:10px;justify-content:flex-end;align-items:center;margin-top:12px"><span class="mut small" id="svMsg"></span><button class="btn" id="bSave">Simpan Catatan</button></div></div>`}
+        <label class="f">Akhiri pengerjaan</label><button class="btn danger" id="bForce">Kirim paksa sekarang</button>
+        <p class="hint">Jawaban yang sudah tersinkron dikirim dan dinilai. Peserta tidak dapat melanjutkan.</p><div class="small" id="ctlMsg"></div></div>`
+      : `<div class="panel"><h3>Catatan trainer</h3><textarea id="note" placeholder="Catatan untuk peserta ini">${esc(a.trainer_notes || "")}</textarea>
+        <div style="display:flex;gap:10px;justify-content:flex-end;align-items:center;margin-top:12px"><span class="mut small" id="svMsg"></span><button class="btn" id="bSave">Simpan</button></div></div>`}
     </div>
     <div id="sum"></div>
-    ${legacy ? "" : `<div class="bar" style="margin-top:24px"><h2 style="margin-right:auto">Jawaban</h2><div class="seg" id="pf"><button data-v="all">Semua</button><button data-v="wrong">Salah / kosong</button><button data-v="flag">Ragu-ragu</button></div></div>
-      ${s.shuffle_opt ? `<div class="alert info">${ic("info")}<span>Pilihan jawaban diacak untuk peserta ini. Huruf di tabel mengikuti urutan bank soal (sama dengan kunci).</span></div>` : ""}<div id="pn"></div>`}
-    <div style="display:flex;justify-content:flex-end;margin:24px 0 60px"><button class="btn danger sm" id="bDel">${ic("trash")}Hapus peserta</button></div>`;
+    ${legacy ? "" : `<div class="bar" style="margin-top:28px"><h2 style="margin-right:auto">Jawaban</h2><div class="seg" id="pf"><button data-v="all">Semua</button><button data-v="wrong">Salah / kosong</button><button data-v="flag">Ragu-ragu</button></div></div>
+      ${s.shuffle_opt ? `<div class="alert info">Pilihan jawaban diacak untuk peserta ini. Huruf di tabel mengikuti urutan bank soal (sama dengan kunci).</div>` : ""}<div id="pn"></div>`}
+    <div style="display:flex;justify-content:flex-end;margin:24px 0 60px"><button class="btn danger sm" id="bDel">Hapus peserta</button></div>`;
   $("#bBack").onclick = () => { cur = null; $("#vDet").hidden = true; $("#vList").hidden = false; renderList(); };
   $("#bDel").onclick = delAttempt;
   if (lock) { $("#bAdd").onclick = addTime; $("#bForce").onclick = forceSubmit; } else $("#bSave").onclick = saveNote;
@@ -298,12 +300,12 @@ function summary() {
   const a = cur.a, c = calc(a), ok = scored(a) && c;
   if (!ok) { $("#sum").innerHTML = ""; return; }
   const comp = Object.entries(c.comp), weak = comp.filter(([k, v]) => REM[k] && v.got / v.max < 0.6).map(([k]) => REM[k]);
-  $("#sum").innerHTML = `<h2 style="margin:24px 0 12px">Rincian per area</h2>
+  $("#sum").innerHTML = `<h2 style="margin:28px 0 12px">Rincian per area</h2>
     <div class="tw"><table><thead><tr><th>Area</th><th>Benar</th><th>Persentase</th></tr></thead><tbody>${comp.map(([k, v]) => {
       const pc = Math.round(v.got / v.max * 100);
       return `<tr><td>${esc((E.codes || {})[k] || k)} <span class="mut small">${esc(k)}</span></td><td>${v.got}/${v.max}</td><td><div class="pb"><div class="pbar ${pc < 60 ? "bad" : pc < 80 ? "" : "ok"}"><i style="width:${pc}%"></i></div><span class="small">${pc}%</span></div></td></tr>`;
     }).join("")}</tbody></table></div>
-    ${weak.length ? `<div class="alert">${ic("alert")}<div><b>Rekomendasi remedial</b> (area &lt; 60%): ${weak.map(esc).join("; ")}</div></div>` : ""}`;
+    ${weak.length ? `<div class="alert"><b>Rekomendasi remedial</b> (area &lt; 60%): ${weak.map(esc).join("; ")}</div>` : ""}`;
 }
 
 function panel() {
@@ -313,7 +315,7 @@ function panel() {
     if (cur.filter === "wrong" && (!fin || ok)) return "";
     if (cur.filter === "flag" && !f) return "";
     const tx = x => x ? `${x}. ${esc(o[L.indexOf(x)])}` : `<span class="mut">—</span>`;
-    return `<tr><td class="nw">${n}${f ? ` <span title="Ditandai ragu-ragu" style="color:var(--flag)">${ic("flag")}</span>` : ""}</td><td>${esc(q)}<div class="mut small">${esc((cfg.comp || {})[n] || "")}${cfg.exp && cfg.exp[n] ? " · Pembahasan: " + esc(cfg.exp[n]) : ""}</div></td><td>${tx(v)}</td><td>${tx(k)}</td><td class="nw ${fin ? (ok ? "ok" : "no") : ""}">${fin ? (ok ? "✓ +1" : "✗ 0") : "—"}</td></tr>`;
+    return `<tr><td class="nw">${n}${f ? `<span class="fmark" title="Ditandai ragu-ragu">R</span>` : ""}</td><td>${esc(q)}<div class="mut small">${esc((cfg.comp || {})[n] || "")}${cfg.exp && cfg.exp[n] ? " · Pembahasan: " + esc(cfg.exp[n]) : ""}</div></td><td>${tx(v)}</td><td>${tx(k)}</td><td class="nw ${fin ? (ok ? "ok" : "no") : ""}">${fin ? (ok ? "Benar" : "Salah") : "—"}</td></tr>`;
   }).join("");
   const none = cur.filter === "flag" ? "Tidak ada soal yang ditandai ragu-ragu." : "Tidak ada jawaban salah.";
   $("#pn").innerHTML = `<div class="tw"><table class="qx"><thead><tr><th>No</th><th>Pertanyaan</th><th>Jawaban peserta</th><th>Kunci</th><th>Hasil</th></tr></thead><tbody>${body || `<tr><td colspan="5"><div class="empty">${none}</div></td></tr>`}</tbody></table></div>`;
@@ -339,7 +341,7 @@ async function forceSubmit() {
 }
 async function saveNote() {
   $("#bSave").disabled = true; $("#svMsg").textContent = "Menyimpan…";
-  try { const d = await updAttempt({ trainer_notes: $("#note").value }); cur.a = d; $("#svMsg").textContent = "Catatan tersimpan"; }
+  try { const d = await updAttempt({ trainer_notes: $("#note").value }); cur.a = d; $("#svMsg").textContent = "Tersimpan"; }
   catch (e) { $("#svMsg").textContent = "Gagal: " + e.message; }
   $("#bSave").disabled = false;
 }
@@ -362,15 +364,15 @@ function itemStats(list) {
 }
 function renderAnal() {
   const fin = batchRows().filter(r => scored(r) && isCur(r));
-  if (!fin.length) { $("#anal").innerHTML = `<div class="card empty">${ic("chart")}<h3 style="margin:4px 0 6px;color:var(--ink)">Belum ada data</h3><p style="margin:0">Analisis muncul setelah ada peserta yang mengirim jawaban pada batch ini.</p></div>`; return; }
+  if (!fin.length) { $("#anal").innerHTML = `<div class="card empty"><h3 style="margin:0 0 6px;color:var(--ink)">Belum ada data</h3><p style="margin:0">Analisis muncul setelah ada peserta yang mengirim jawaban.</p></div>`; return; }
   const it = itemStats(fin), byArea = {};
   it.forEach(x => { (byArea[x.comp] = byArea[x.comp] || []).push(x.p); });
   const hard = it.filter(x => x.p < 50).length, easy = it.filter(x => x.p >= 80).length;
   let list = an.area === "all" ? it : it.filter(x => x.comp === an.area);
   if (an.sort === "hard") list = [...list].sort((a, b) => a.p - b.p || a.n - b.n);
   if (an.sort === "easy") list = [...list].sort((a, b) => b.p - a.p || a.n - b.n);
-  const areas = Object.entries(byArea).map(([k, ps]) => { const v = Math.round(ps.reduce((t, x) => t + x, 0) / ps.length); return `<div class="area"><div class="t"><span>${esc((E.codes || {})[k] || k)}</span><b>${v}%</b></div><div class="pbar ${v < 60 ? "bad" : v < 80 ? "" : "ok"}"><i style="width:${v}%"></i></div><div class="xs mut" style="margin-top:6px">${ps.length} soal · rata-rata benar</div></div>`; }).join("");
-  $("#anal").innerHTML = `<div class="stats s4">${stat("Peserta dinilai", fin.length, "users")}${stat("Rata-rata benar", Math.round(it.reduce((t, x) => t + x.p, 0) / it.length) + "%", "chart")}${stat("Soal sulit", hard, "alert", "&lt; 50% peserta benar", "w")}${stat("Soal mudah", easy, "check", "≥ 80% peserta benar", "o")}</div>
+  const areas = Object.entries(byArea).map(([k, ps]) => { const v = Math.round(ps.reduce((t, x) => t + x, 0) / ps.length); return `<div class="area"><div class="t"><span>${esc((E.codes || {})[k] || k)}</span><span>${v}%</span></div><div class="pbar ${v < 60 ? "bad" : v < 80 ? "" : "ok"}"><i style="width:${v}%"></i></div><div class="xs mut" style="margin-top:7px">${ps.length} soal</div></div>`; }).join("");
+  $("#anal").innerHTML = `<div class="stats s4">${stat("Peserta dinilai", fin.length)}${stat("Rata-rata benar", Math.round(it.reduce((t, x) => t + x.p, 0) / it.length) + "%", "", true)}${stat("Soal sulit", hard, "&lt; 50% peserta benar")}${stat("Soal mudah", easy, "≥ 80% peserta benar")}</div>
     <h2 style="margin:8px 0 12px">Per area</h2><div class="areas">${areas}</div>
     <div class="bar"><h2 style="margin-right:auto">Per soal</h2>
       <select id="anArea" aria-label="Filter area"><option value="all">Semua area</option>${Object.keys(byArea).map(k => `<option value="${esc(k)}" ${an.area === k ? "selected" : ""}>${esc((E.codes || {})[k] || k)}</option>`).join("")}</select>
@@ -380,9 +382,9 @@ function renderAnal() {
       return `<tr><td>${x.n}</td><td>${esc(x.q)}<div class="mut small">${esc(x.comp)} · kunci ${x.k}${x.flags ? ` · ${x.flags} peserta ragu-ragu` : ""}</div></td>
         <td class="nw"><div class="pb" style="min-width:120px"><div class="pbar ${x.p < 50 ? "bad" : x.p < 80 ? "" : "ok"}"><i style="width:${x.p}%"></i></div><span class="small">${x.p}%</span></div></td>
         <td><span class="lvl ${lc}">${lt}</span></td>
-        <td><div class="dist">${L.split("").map(l => `<span class="${l === x.k ? "k" : x.d[l] > x.d[x.k] ? "hot" : ""}" title="${esc(x.o[L.indexOf(l)])}">${l} ${x.d[l]}</span>`).join("")}<span title="Tidak dijawab">— ${x.d._}</span></div></td></tr>`;
+        <td><div class="dist">${L.split("").map(l => `<span class="${l === x.k ? "k" : x.d[l] > x.d[x.k] ? "hot" : ""}" title="${esc(x.o[L.indexOf(l)])}">${l} ${x.d[l]}</span>`).join("")}<span title="Tidak dijawab">– ${x.d._}</span></div></td></tr>`;
     }).join("")}</tbody></table></div>
-    <p class="hint">Hijau = kunci jawaban. Merah = pengecoh yang dipilih lebih banyak peserta daripada kunci (indikasi miskonsepsi atau soal ambigu).</p>`;
+    <p class="hint">Hijau: kunci jawaban. Merah: pengecoh yang dipilih lebih banyak peserta daripada kunci (indikasi miskonsepsi atau soal ambigu).</p>`;
   $$("#anSort button").forEach(b => b.classList.toggle("on", b.dataset.v === an.sort));
   $("#anSort").onclick = e => { const b = e.target.closest("button"); if (b) { an.sort = b.dataset.v; renderAnal(); } };
   $("#anArea").onchange = e => { an.area = e.target.value; renderAnal(); };
@@ -390,7 +392,7 @@ function renderAnal() {
 
 // ---- ekspor Excel ----
 $("#bXls").onclick = async () => {
-  $("#bXls").disabled = true; $("#bXlsT").textContent = "Menyiapkan…";
+  $("#bXls").disabled = true; $("#bXls").textContent = "Menyiapkan…";
   try { await load(); await exportXlsx(); } catch (e) { alert("Gagal ekspor: " + e.message); }
   $("#bXls").disabled = false; setXlsLabel();
 };
@@ -403,12 +405,12 @@ function body(ws) {
   ws.eachRow((r, i) => { if (i === 1) return; r.eachCell(c => { c.alignment = { vertical: "top", wrapText: true }; c.border = { bottom: { style: "thin", color: { argb: "FFE3E8EF" } } }; }); });
 }
 async function exportXlsx() {
-  const wb = new ExcelJS.Workbook(); wb.creator = "ISO 9001:2026 Final Assessment"; wb.created = new Date();
+  const wb = new ExcelJS.Workbook(); wb.creator = "Total Quality Training Exam"; wb.created = new Date();
   const codeMax = {}; Object.values(cfg.comp || {}).forEach(c => codeMax[c] = (codeMax[c] || 0) + 1);
   const codes = Object.keys(codeMax);
   const w1 = wb.addWorksheet("Rekap Nilai");
   w1.columns = [["No", 5], ["Nama", 26], ["Jabatan", 24], ["Copart", 24], ["Kode Batch", 11], ["Status", 16], ["Mulai", 18], ["Submit", 18], ["Durasi (mnt)", 12], ["Terjawab", 10], ["Benar", 9], ["Nilai (/100)", 12], ["Kategori", 24], ["Nilai lulus", 10], ["Lulus", 12],
-    ...codes.map(c => [`${c} (/${codeMax[c]})`, 12]), ["Ragu-ragu", 10], ["Keluar tab (kali)", 12], ["Waktu di luar (mnt)", 13], ["Catatan trainer", 40]].map(([header, width], i) => ({ header, width, key: "c" + i }));
+    ...codes.map(c => [`${c} (/${codeMax[c]})`, 12]), ["Ragu-ragu", 10], ["Keluar halaman (kali)", 13], ["Waktu di luar (mnt)", 13], ["Keluar layar penuh (kali)", 14], ["Tanpa layar penuh", 12], ["Catatan trainer", 40]].map(([header, width], i) => ({ header, width, key: "c" + i }));
   const w2 = wb.addWorksheet("Detail Jawaban");
   w2.columns = [["Nama", 24], ["Jabatan", 20], ["Copart", 22], ["No", 6], ["Area", 10], ["Pertanyaan", 60], ["Jawaban peserta", 50], ["Kunci", 8], ["Poin", 8], ["Ragu-ragu", 10]].map(([header, width], i) => ({ header, width, key: "c" + i }));
   const list = [...batchRows()].reverse();
@@ -416,7 +418,7 @@ async function exportXlsx() {
     const ok = scored(a), legacy = ok && !isCur(a), c = ok ? calc(a) : null, mc = (a.answers || {}).mc || {}, ev = evOf(a), fl = flOf(a);
     w1.addRow([i + 1, a.name, a.job_title, a.copart || "", bcode(a.batch_id), legacy ? "Selesai (soal versi lama)" : ST[a.status], new Date(a.started_at), a.submitted_at ? new Date(a.submitted_at) : "", mins(a) ?? "", a.answered_count || 0,
       ...(c ? [c.right, c.total, c.cat, c.pm, c.pass ? "Lulus" : "Belum lulus", ...codes.map(k => (c.comp[k] || { got: 0 }).got)] : ["", "", "", passMark(a), "", ...codes.map(() => "")]),
-      fl.length, ev.blur || 0, ev.away ? Math.round(ev.away / 6) / 10 : 0, a.trainer_notes || ""]);
+      fl.length, ev.blur || 0, ev.away ? Math.round(ev.away / 6) / 10 : 0, ev.fs || 0, ev.nofs ? "Ya" : "", a.trainer_notes || ""]);
     if (!c) return;
     E.mc.forEach(([n, q, o]) => { const v = mc[n] || "", k = cfg.mc[n];
       w2.addRow([a.name, a.job_title, a.copart || "", n, (cfg.comp || {})[n] || "", q, v ? `${v}. ${o[L.indexOf(v)] || ""}` : "", k, v === k ? 1 : 0, fl.includes(n) ? "Ya" : ""]); });
@@ -429,7 +431,7 @@ async function exportXlsx() {
   ["G", "H"].forEach(col => w1.getColumn(col).numFmt = "dd/mm/yyyy hh:mm");
   const buf = await wb.xlsx.writeBuffer(), url = URL.createObjectURL(new Blob([buf], { type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" }));
   const el = document.createElement("a"); el.href = url; const bn = (bOf(bf) || {}).copart, slug = bn ? "_" + bn.replace(/[^A-Za-z0-9]+/g, "_").replace(/^_|_$/g, "") : "";
-  el.download = "Hasil_Final_Assessment_ISO9001" + slug + "_" + new Date().toISOString().slice(0, 10) + ".xlsx"; el.click(); URL.revokeObjectURL(url);
+  el.download = "Hasil_Training_Exam" + slug + "_" + new Date().toISOString().slice(0, 10) + ".xlsx"; el.click(); URL.revokeObjectURL(url);
 }
 init();
 })();

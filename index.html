@@ -3,7 +3,7 @@
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width,initial-scale=1" />
-    <title>Final Assessment ISO 9001:2026</title>
+    <title>Total Quality Training Exam</title>
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link
@@ -14,93 +14,44 @@
     <link rel="stylesheet" href="assets/style.css" />
   </head>
   <body>
-    <div id="vFatal" class="view wrap center" hidden>
-      <h2 id="fatalTitle">Konfigurasi belum lengkap</h2>
-      <p class="mut" id="fatalMsg"></p>
-      <button class="btn" id="bReload" hidden onclick="location.reload()">
-        Muat ulang
-      </button>
+    <div id="vFatal" class="view done" hidden>
+      <div class="done-in">
+        <h2 id="fatalTitle">Konfigurasi belum lengkap</h2>
+        <p class="mut" id="fatalMsg"></p>
+        <button class="btn" id="bReload" hidden onclick="location.reload()">Muat ulang</button>
+      </div>
     </div>
 
-    <main id="vStart" class="view wrap wide" hidden>
-      <div class="split">
-        <section class="lead">
-          <div class="brand">
-            <img
-              class="logo-img"
-              src="assets/logo.png"
-              alt="Logo"
-              onerror="this.outerHTML = '<div class=logo>QMS</div>'"
-            />
+    <main id="vStart" class="view start" hidden>
+      <div class="card start-card">
+        <img
+          class="start-logo"
+          src="assets/logo.png"
+          alt="Total Quality"
+          onerror="this.outerHTML = '<div class=logo>TQ</div>'"
+        />
+        <h1>Total Quality Training Exam</h1>
+
+        <form id="fCode">
+          <label class="f" for="code">Kode batch</label>
+          <input id="code" class="codein" type="text" inputmode="numeric" autocomplete="off" placeholder="000000" required />
+          <div class="err" id="cErr"></div>
+          <button class="btn block" id="bCode" type="submit">Lanjut</button>
+        </form>
+
+        <form id="fStart" hidden>
+          <div class="bmeta">
+            <div><b id="bCopart"></b><span id="bInfo"></span></div>
+            <button type="button" class="link" id="bChange">Ganti</button>
           </div>
-          <div class="eyebrow"><span class="tag" id="sTag">Ujian online</span></div>
-          <h1 id="sTitle"></h1>
-          <p class="sub" id="sSub"></p>
-          <div class="meta">
-            <div><b id="mQ"></b><span>Total soal</span></div>
-            <div><b id="mT"></b><span>Menit</span></div>
-            <div><b id="mS"></b><span>Bagian</span></div>
-          </div>
-          <ul class="steps">
-            <li><i>1</i><span>Masukkan kode batch dari trainer, lalu isi nama dan jabatan.</span></li>
-            <li><i>2</i><span>Soal dibagi per bagian. Gunakan panel nomor soal untuk berpindah dan tandai <b>Ragu-ragu</b> pada soal yang ingin ditinjau ulang.</span></li>
-            <li><i>3</i><span>Periksa ringkasan jawaban, lalu tekan <b>Kirim Jawaban</b> sebelum waktu habis.</span></li>
-          </ul>
-        </section>
-        <div>
-          <form id="fCode" class="card formcard">
-            <h2>Masukkan Kode Batch</h2>
-            <p class="mut small" style="margin: 4px 0 18px">
-              Kode 6 angka dari trainer Anda.
-            </p>
-            <input
-              id="code"
-              class="codein"
-              type="text"
-              inputmode="numeric"
-              autocomplete="off"
-              placeholder="000000"
-              required
-            />
-            <div class="err" id="cErr"></div>
-            <button class="btn block" id="bCode" type="submit">Lanjut <i data-i="chevR"></i></button>
-          </form>
-          <form id="fStart" class="card formcard" hidden>
-            <h2>Data Peserta</h2>
-            <p class="mut small" style="margin: 4px 0 0">
-              Isi data berikut untuk memulai ujian.
-            </p>
-            <label class="f" for="name">Nama lengkap</label
-            ><input
-              id="name"
-              type="text"
-              required
-              minlength="2"
-              maxlength="120"
-              autocomplete="name"
-              placeholder="Nama sesuai identitas"
-            />
-            <label class="f" for="job">Jabatan</label
-            ><input
-              id="job"
-              type="text"
-              required
-              minlength="2"
-              maxlength="120"
-              placeholder="Contoh: QMS Manager"
-            />
-            <label class="f" for="copart">Copart</label
-            ><input id="copart" type="text" disabled />
-            <ul class="rules" id="rules"></ul>
-            <div class="err" id="sErr"></div>
-            <button class="btn block" id="bStart" type="submit">
-              Mulai Ujian
-            </button>
-            <p style="text-align: center; margin: 14px 0 0">
-              <a href="#" id="bChange" class="small">Ganti kode batch</a>
-            </p>
-          </form>
-        </div>
+          <label class="f" for="name">Nama lengkap</label>
+          <input id="name" type="text" required minlength="2" maxlength="120" autocomplete="name" />
+          <label class="f" for="job">Jabatan</label>
+          <input id="job" type="text" required minlength="2" maxlength="120" />
+          <div class="err" id="sErr"></div>
+          <button class="btn block" id="bStart" type="submit">Mulai Ujian</button>
+          <p class="fine">Ujian berlangsung dalam mode layar penuh.</p>
+        </form>
       </div>
     </main>
 
@@ -108,31 +59,18 @@
       <header class="top">
         <div class="in">
           <div class="brand">
-            <img
-              class="logo-img"
-              src="assets/logo.png"
-              alt="Logo"
-              onerror="this.outerHTML = '<div class=logo>QMS</div>'"
-            />
+            <img class="logo-img" src="assets/logo.png" alt="Total Quality" onerror="this.outerHTML = '<div class=logo>TQ</div>'" />
             <div class="who"><b id="whoN"></b><span id="whoM"></span></div>
           </div>
           <div class="sp"></div>
           <div class="prog">
-            <span
-              ><b id="pCount">0</b> / <span id="pTotal"></span> terjawab ·
-              <em id="saveSt">—</em></span
-            >
+            <span><b id="pCount">0</b> / <span id="pTotal"></span> terjawab · <em id="saveSt">—</em></span>
             <div class="pbar"><i id="pBar" style="width: 0"></i></div>
           </div>
-          <div class="timer" id="timerBox" title="Sisa waktu">
-            <i data-i="clock"></i><span id="timer">--:--</span>
-          </div>
+          <div class="timer" id="timerBox"><span class="tl">Sisa waktu</span><span id="timer">--:--</span></div>
         </div>
-        <nav class="subnav" id="subnav" aria-label="Bagian soal"></nav>
         <div class="net" id="net" hidden>
-          <i data-i="wifiOff"></i>
-          <span>Tidak ada koneksi — Anda tetap dapat mengisi. Jawaban tersimpan di
-          perangkat ini dan akan tersinkron otomatis saat tersambung kembali.</span>
+          Offline — jawaban tersimpan di perangkat dan tersinkron otomatis saat koneksi kembali.
         </div>
       </header>
 
@@ -141,8 +79,7 @@
         <aside class="side" id="side" aria-label="Navigasi soal">
           <div class="side-card">
             <div class="side-h">
-              <h3><i data-i="grid"></i>Navigasi Soal</h3>
-              <div class="sp"></div>
+              <h3>Navigasi soal</h3>
               <button class="m-x x" id="sideX" aria-label="Tutup"><i data-i="x"></i></button>
             </div>
             <div class="counts">
@@ -154,26 +91,36 @@
             <div class="legend">
               <span><i class="a"></i>Terjawab</span>
               <span><i class="f"></i>Ragu-ragu</span>
-              <span><i></i>Belum dijawab</span>
+              <span><i></i>Belum</span>
             </div>
             <div class="side-f">
-              <button class="btn block" id="bSubmit"><i data-i="send"></i>Kirim Jawaban</button>
+              <button class="btn block" id="bSubmit">Kirim Jawaban</button>
             </div>
           </div>
         </aside>
       </div>
-      <button class="fab" id="fab"><i data-i="grid"></i><span id="fabTxt">Daftar soal</span></button>
+      <button class="fab" id="fab"><span id="fabTxt">Navigasi soal</span></button>
       <div class="scrim" id="scrim" hidden></div>
+
+      <div class="lock" id="lock" hidden>
+        <div class="lock-card">
+          <h2>Layar penuh diperlukan</h2>
+          <p class="mut" id="lockM">Ujian hanya dapat dikerjakan dalam layar penuh. Setiap keluar dari layar penuh dicatat dan dilaporkan ke trainer.</p>
+          <div class="lock-time">Sisa waktu<b id="lockTimer">--:--</b></div>
+          <button class="btn block" id="bLock">Lanjutkan Ujian</button>
+        </div>
+      </div>
     </div>
 
-    <main id="vDone" class="view wrap center" hidden>
-      <div class="okc"><i data-i="check"></i></div>
-      <h1>Jawaban Terkirim</h1>
-      <p class="mut" style="margin-top: 12px" id="doneMsg">
-        Terima kasih. Jawaban Anda telah diterima.<br />Hasil akan disampaikan
-        oleh trainer. Anda dapat menutup halaman ini.
-      </p>
-      <div id="result"></div>
+    <main id="vDone" class="view done" hidden>
+      <div class="done-in">
+        <div class="okc"><i data-i="check"></i></div>
+        <h1>Jawaban terkirim</h1>
+        <p class="mut" style="margin: 10px 0 0" id="doneMsg">
+          Terima kasih. Hasil akan disampaikan oleh trainer. Anda dapat menutup halaman ini.
+        </p>
+        <div id="result"></div>
+      </div>
     </main>
 
     <div class="modal" id="mConfirm" hidden>
@@ -182,18 +129,16 @@
           <h2 id="mTitle">Kirim jawaban?</h2>
           <button class="m-x" id="mX" aria-label="Tutup"><i data-i="x"></i></button>
         </div>
-        <p class="mut" id="mInfo" style="margin: 8px 0 0"></p>
+        <p class="mut small" id="mInfo" style="margin: 6px 0 0"></p>
         <div id="mSum"></div>
         <label class="ck" id="ckRow"
           ><input type="checkbox" id="ck" /><span
-            >Saya menyatakan bahwa jawaban evaluasi ini merupakan hasil
-            pemahaman dan analisis saya sendiri.</span
+            >Saya menyatakan bahwa jawaban ini merupakan hasil pemahaman dan analisis saya sendiri.</span
           ></label
         >
         <div class="err" id="mErr"></div>
         <div class="m-f" id="mBtns">
-          <button class="btn ghost" id="mNo">Kembali</button
-          ><button class="btn" id="mYes" disabled><i data-i="send"></i>Kirim Final</button>
+          <button class="btn ghost" id="mNo">Kembali</button><button class="btn" id="mYes" disabled>Kirim Final</button>
         </div>
       </div>
     </div>

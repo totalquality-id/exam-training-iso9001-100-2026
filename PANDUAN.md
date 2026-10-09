@@ -77,12 +77,20 @@ Klik **Batch Baru** atau tombol **Pengaturan** pada kartu batch:
 | Acak pilihan jawaban | Urutan A–D diacak per peserta. Pilihan "Semua benar"/"Ketiganya" tetap di posisinya, dan soal yang pilihannya merujuk huruf lain (mis. "A dan B") tidak diacak. Penilaian tidak terpengaruh. |
 | Tampilkan nilai ke peserta | Setelah mengirim, peserta melihat nilai, jumlah benar, kategori, dan status lulus. Dihitung di server; kunci jawaban tidak pernah dikirim ke browser peserta. Bisa diaktifkan belakangan — peserta cukup memuat ulang halaman. |
 | Wajib menjawab semua soal | Tombol kirim terkunci sampai semua soal terjawab. Saat waktu habis jawaban tetap terkirim otomatis. |
-| Catat perpindahan tab / aplikasi | Peserta diberi tahu di awal dan diingatkan setiap kali kembali. Jumlah & lama keluar halaman tampil di daftar peserta, detail, dan Excel. |
 
-Durasi, pengacakan, wajib jawab semua, dan pencatatan tab disalin ke data peserta saat ia menekan **Mulai Ujian** (perubahan berlaku untuk peserta berikutnya). Nilai lulus, tampilkan nilai, dan jadwal berlaku langsung.
+Durasi, pengacakan, dan wajib jawab semua disalin ke data peserta saat ia menekan **Mulai Ujian** (perubahan berlaku untuk peserta berikutnya). Nilai lulus, tampilkan nilai, dan jadwal berlaku langsung.
+
+## Mode ujian terkunci (selalu aktif)
+- Saat peserta menekan **Mulai Ujian**, halaman masuk **layar penuh**. Jika peserta keluar dari layar penuh (Esc, dsb.), soal langsung tertutup layar kunci dengan sisa waktu dan tombol **Lanjutkan Ujian**; timer tetap berjalan. Setelah halaman dimuat ulang, peserta juga harus menekan tombol ini untuk kembali ke layar penuh.
+- Di Chrome/Edge, tombol Esc dan sebagian pintasan sistem ditahan (Keyboard Lock); Esc harus ditekan lama untuk keluar.
+- Soal tidak bisa diseleksi, disalin, dipotong, ditempel, diseret, atau dicetak; klik kanan serta pintasan Ctrl/Alt/Cmd, F1–F12, dan PrintScreen diblokir. Peringatan muncul jika peserta mencoba menutup/memuat ulang halaman.
+- Setiap keluar halaman (pindah tab/aplikasi), lama di luar, dan keluar layar penuh **dicatat** serta tampil di konsol trainer dan Excel.
+- Jika browser peserta tidak mendukung atau menolak layar penuh (mis. iPhone, atau tautan dibuka dari dalam aplikasi chat), ujian tetap bisa dikerjakan dan peserta ditandai **"tanpa layar penuh"** di konsol trainer. Sarankan peserta membuka tautan di Chrome/Edge pada laptop.
+- **Batasan:** situs web tidak dapat sepenuhnya mengunci perangkat. Alt+Tab, tombol Windows, Ctrl+Alt+Del, menutup browser, atau memotret layar dengan ponsel tetap mungkin dilakukan. Semua kejadian yang terdeteksi dicatat untuk trainer. Untuk penguncian penuh diperlukan aplikasi khusus seperti Safe Exam Browser.
 
 ## Tampilan peserta
-- Soal ditampilkan **satu bagian per halaman** dengan tombol Sebelumnya/Berikutnya dan tab bagian di bagian atas.
+- Halaman awal hanya berisi logo, judul, kode batch, lalu nama dan jabatan.
+- Soal ditampilkan **satu bagian per halaman** dengan tombol Sebelumnya/Berikutnya; perpindahan bagian juga lewat panel navigasi soal.
 - **Panel navigasi soal** di kanan (di ponsel: tombol "Daftar soal" di pojok bawah) menampilkan semua nomor: biru = terjawab, oranye = ragu-ragu, putih = belum dijawab. Klik nomor untuk langsung ke soalnya.
 - Tombol **Ragu-ragu** pada tiap soal untuk menandai soal yang ingin ditinjau ulang; tanda ini ikut tersimpan dan tersinkron.
 - **Hapus jawaban** untuk mengosongkan pilihan.
@@ -90,14 +98,14 @@ Durasi, pengacakan, wajib jawab semua, dan pencatatan tab disalin ke data pesert
 - Pengingat otomatis saat sisa waktu 10, 5, dan 1 menit.
 
 ## Fitur konsol trainer
-- **Peserta**: statistik (termasuk tingkat kelulusan), pencarian, filter status, urutan (terbaru / nilai / nama), sisa waktu peserta yang sedang mengerjakan, dan tanda keluar tab.
+- **Peserta**: statistik (termasuk tingkat kelulusan), pencarian, filter status, urutan (terbaru / nilai / nama), sisa waktu peserta yang sedang mengerjakan, dan catatan keluar halaman / layar penuh.
 - **Detail peserta yang sedang mengerjakan**: **Tambah waktu** (+5/+10/+15/+30 menit; timer peserta diperbarui otomatis dalam ±30 detik) dan **Kirim paksa** (jawaban yang sudah tersinkron dikirim dan dinilai).
 - **Detail peserta selesai**: nilai, status lulus, rincian per area, filter jawaban (semua / salah-kosong / ragu-ragu), catatan trainer.
 - **Analisis Soal**: persentase benar per area dan per soal, tingkat kesulitan (Mudah ≥ 80%, Sedang 50–79%, Sulit < 50%), sebaran pilihan A–D; pengecoh yang dipilih lebih banyak daripada kunci ditandai merah.
-- **Excel**: sheet Rekap Nilai (kini dengan Nilai lulus, Lulus, Ragu-ragu, Keluar tab), Detail Jawaban, dan **Analisis Soal**.
+- **Excel**: sheet Rekap Nilai (kini dengan Nilai lulus, Lulus, Ragu-ragu, Keluar halaman, Keluar layar penuh, Tanpa layar penuh), Detail Jawaban, dan **Analisis Soal**.
 
 ## Logo
-Simpan logo Anda sebagai `assets/logo.png` (disarankan PNG transparan, rasio lebar ≥ tinggi, minimal 300 px lebar). Logo tampil di halaman peserta, halaman admin, dan favicon. Jika file belum ada, otomatis tampil kotak teks "QMS". Setelah mengganti logo, naikkan angka versi `exam-shell-v7` di `sw.js` (mis. `v8`) agar browser peserta memuat logo baru.
+Simpan logo Anda sebagai `assets/logo.png` (disarankan PNG transparan, rasio lebar ≥ tinggi, minimal 300 px lebar). Logo tampil di halaman peserta, halaman admin, dan favicon. Jika file belum ada, otomatis tampil kotak teks "QMS". Setelah mengganti logo, naikkan angka versi `exam-shell-v8` di `sw.js` (mis. `v9`) agar browser peserta memuat logo baru.
 
 ## Ketahanan saat koneksi putus
 - Setiap perubahan jawaban langsung disimpan di perangkat peserta, lalu disinkronkan ke Supabase otomatis (debounce 1,2 detik, ulang tiap 5 detik jika gagal, dan segera saat koneksi kembali).
@@ -122,7 +130,7 @@ Soal ada di `assets/questions.js`; kunci dan pembahasan ada di database (`gradin
 - Peserta yang menghapus data browser (cookies/site data) saat ujian berlangsung kehilangan sesi dan dianggap peserta baru; hapus entri ganda dari admin.
 - Mode penyamaran/incognito menghapus data saat ditutup, jadi minta peserta tidak memakainya.
 - Halaman admin memuat ulang data tiap 10 detik (tanpa Realtime agar setup tetap sederhana).
-- Pencatatan perpindahan tab dilakukan oleh browser peserta, jadi bersifat indikasi (bukan bukti mutlak) — misalnya notifikasi sistem atau mengunci layar juga ikut tercatat.
+- Pencatatan keluar halaman dilakukan oleh browser peserta, jadi bersifat indikasi (bukan bukti mutlak) — misalnya notifikasi sistem atau mengunci layar juga ikut tercatat.
 
 ## Pemecahan masalah
 | Gejala | Penyebab umum |

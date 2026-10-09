@@ -1,15 +1,16 @@
 <!DOCTYPE html>
 <html lang="id"><head>
 <meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
-<title>Admin — Final Assessment ISO 9001:2026</title>
+<title>Trainer Console — Total Quality Training Exam</title>
 <link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
 <link rel="icon" href="assets/logo.png">
 <link rel="stylesheet" href="assets/style.css">
 </head><body>
 <main id="vLogin" class="view login card" hidden>
-  <div class="brand"><img class="logo-img" src="assets/logo.png" alt="Logo" onerror="this.outerHTML='<div class=logo>QMS</div>'"><span>Trainer Console</span></div>
-  <p class="mut small" style="margin:0 0 4px">Masuk untuk mengelola batch dan memantau peserta.</p>
+  <img class="logo-img" src="assets/logo.png" alt="Total Quality" onerror="this.outerHTML='<div class=logo>TQ</div>'">
+  <h1>Trainer Console</h1>
+  <p class="mut small" style="margin:0">Total Quality Training Exam</p>
   <form id="fLogin">
     <label class="f" for="em">Email</label><input id="em" type="email" required autocomplete="username">
     <label class="f" for="pw">Password</label><input id="pw" type="password" required autocomplete="current-password">
@@ -19,28 +20,26 @@
 
 <div id="vApp" class="view" hidden>
   <header class="top"><div class="in">
-    <div class="brand"><img class="logo-img" src="assets/logo.png" alt="Logo" onerror="this.outerHTML='<div class=logo>QMS</div>'"></div>
+    <img class="logo-img" src="assets/logo.png" alt="Total Quality" onerror="this.outerHTML='<div class=logo>TQ</div>'">
     <nav class="ntabs" id="ntabs">
-      <button class="ntab on" data-p="list"><i data-i="users"></i><span>Peserta</span></button>
-      <button class="ntab" data-p="batch"><i data-i="layers"></i><span>Batch</span></button>
-      <button class="ntab" data-p="anal"><i data-i="chart"></i><span>Analisis Soal</span></button>
+      <button class="ntab on" data-p="list">Peserta</button><button class="ntab" data-p="batch">Batch</button><button class="ntab" data-p="anal">Analisis</button>
     </nav>
     <div class="sp"></div>
-    <span class="upd" title="Data diperbarui otomatis setiap 10 detik"><span class="live"></span><span id="upd"></span></span>
-    <button class="btn ghost sm icon" id="bRef" title="Muat ulang data"><i data-i="refresh"></i></button>
-    <div class="me"><div class="avatar" id="meA"></div><span id="me"></span></div>
-    <button class="btn ghost sm" id="bOut" title="Keluar"><i data-i="logout"></i></button>
+    <span class="upd" id="upd"></span>
+    <button class="btn ghost sm" id="bRef">Refresh</button>
+    <span class="me" id="me"></span>
+    <button class="btn ghost sm" id="bOut">Keluar</button>
   </div></header>
 
   <main class="wrap wide" id="vList">
     <section id="pgList">
       <div class="phead">
-        <div><h1>Peserta</h1><p class="mut">Pantau progres dan nilai peserta secara langsung.</p></div>
-        <div class="ctl"><div class="selbox"><i data-i="layers"></i><select class="fb" aria-label="Filter batch"></select></div><button class="btn" id="bXls"><i data-i="download"></i><span id="bXlsT">Ekspor Excel</span></button></div>
+        <div><h1>Peserta</h1><p class="mut">Progres dan nilai peserta, diperbarui otomatis.</p></div>
+        <div class="ctl"><select class="fb" aria-label="Filter batch"></select><button class="btn" id="bXls">Ekspor Excel</button></div>
       </div>
       <div class="stats" id="stats"></div>
       <div class="bar">
-        <div class="search"><i data-i="search"></i><input type="search" id="qs" placeholder="Cari nama, jabatan, atau Copart…"></div>
+        <input type="search" id="qs" placeholder="Cari nama, jabatan, atau Copart">
         <div class="seg" id="fs"><button class="on" data-v="all">Semua</button><button data-v="in_progress">Mengerjakan</button><button data-v="done">Selesai</button></div>
         <div class="sp"></div>
         <select id="sort" aria-label="Urutkan"><option value="new">Terbaru</option><option value="score">Nilai tertinggi</option><option value="low">Nilai terendah</option><option value="name">Nama A–Z</option></select>
@@ -51,8 +50,8 @@
 
     <section id="pgBatch" hidden>
       <div class="phead">
-        <div><h1>Batch</h1><p class="mut">Satu batch untuk satu Copart. Atur durasi, jadwal, dan aturan ujian per batch.</p></div>
-        <div class="ctl"><button class="btn" id="bNew"><i data-i="plus"></i>Batch Baru</button></div>
+        <div><h1>Batch</h1><p class="mut">Satu batch untuk satu Copart, dengan durasi, jadwal, dan aturan masing-masing.</p></div>
+        <div class="ctl"><button class="btn" id="bNew">Batch Baru</button></div>
       </div>
       <div id="bWarn"></div>
       <div id="bnOk"></div>
@@ -62,8 +61,8 @@
 
     <section id="pgAnal" hidden>
       <div class="phead">
-        <div><h1>Analisis Soal</h1><p class="mut">Tingkat kesulitan dan sebaran jawaban tiap soal, dari peserta yang sudah mengirim.</p></div>
-        <div class="ctl"><div class="selbox"><i data-i="layers"></i><select class="fb" aria-label="Filter batch"></select></div></div>
+        <div><h1>Analisis Soal</h1><p class="mut">Tingkat kesulitan dan sebaran jawaban dari peserta yang sudah mengirim.</p></div>
+        <div class="ctl"><select class="fb" aria-label="Filter batch"></select></div>
       </div>
       <div id="anal"></div>
       <div style="height:60px"></div>
@@ -75,25 +74,25 @@
 
 <div class="modal" id="mBatch" hidden>
   <div class="card lg">
-    <div class="m-h"><div><h2 id="mbTitle">Batch Baru</h2><p class="mut small" id="mbSub" style="margin:4px 0 0"></p></div><button class="m-x" id="mbX" type="button" aria-label="Tutup"><i data-i="x"></i></button></div>
+    <div class="m-h"><div><h2 id="mbTitle">Batch Baru</h2><p class="mut small" id="mbSub" style="margin:2px 0 0"></p></div><button class="m-x" id="mbX" type="button" aria-label="Tutup"><i data-i="x"></i></button></div>
     <form id="fBatch">
       <div class="fgrid">
-        <div><label class="f" for="bnName">Nama Copart</label><input id="bnName" type="text" maxlength="120" required placeholder="Contoh: PT Sinar Jaya Abadi"></div>
-        <div><label class="f" for="bnNote">Keterangan (opsional)</label><input id="bnNote" type="text" maxlength="200" placeholder="Contoh: Angkatan 1 · 14 Oktober"></div>
+        <div><label class="f" for="bnName">Nama Copart</label><input id="bnName" type="text" maxlength="120" required placeholder="PT Sinar Jaya Abadi"></div>
+        <div><label class="f" for="bnNote">Keterangan (opsional)</label><input id="bnNote" type="text" maxlength="200" placeholder="Angkatan 1 · 14 Oktober"></div>
       </div>
       <div class="fsec">
-        <h4><i data-i="clock"></i>Waktu &amp; penilaian</h4>
+        <h4>Waktu &amp; penilaian</h4>
         <div class="fgrid">
-          <div><label class="f" for="bnMin">Durasi pengerjaan (menit)</label><input id="bnMin" type="number" min="5" max="600" step="1" value="90">
+          <div><label class="f" for="bnMin">Durasi (menit)</label><input id="bnMin" type="number" min="5" max="600" step="1" value="90">
             <div class="presets" id="presets"><button type="button" data-m="45">45</button><button type="button" data-m="60">60</button><button type="button" data-m="90">90</button><button type="button" data-m="120">120</button><button type="button" data-m="150">150</button></div></div>
-          <div><label class="f" for="bnPass">Nilai minimal lulus (0–100)</label><input id="bnPass" type="number" min="0" max="100" step="1" value="70"><div class="hint">Dipakai untuk status Lulus / Belum lulus di konsol, Excel, dan hasil peserta.</div></div>
+          <div><label class="f" for="bnPass">Nilai minimal lulus</label><input id="bnPass" type="number" min="0" max="100" step="1" value="70"></div>
           <div><label class="f" for="bnFrom">Dibuka mulai (opsional)</label><input id="bnFrom" type="datetime-local"></div>
           <div><label class="f" for="bnUntil">Ditutup pada (opsional)</label><input id="bnUntil" type="datetime-local"></div>
         </div>
-        <div class="hint">Jadwal hanya membatasi kapan peserta dapat <b>mulai</b>. Peserta yang sudah mulai tetap dapat menyelesaikan ujiannya.</div>
+        <div class="hint">Jadwal hanya membatasi kapan peserta dapat mulai. Peserta yang sudah mulai tetap dapat menyelesaikan ujian.</div>
       </div>
       <div class="fsec">
-        <h4><i data-i="sliders"></i>Aturan ujian</h4>
+        <h4>Aturan ujian</h4>
         <div class="toggles" id="toggles"></div>
       </div>
       <div class="alert info" id="mbNote"></div>

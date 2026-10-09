@@ -33,13 +33,19 @@
               onerror="this.outerHTML = '<div class=logo>QMS</div>'"
             />
           </div>
+          <div class="eyebrow"><span class="tag" id="sTag">Ujian online</span></div>
           <h1 id="sTitle"></h1>
           <p class="sub" id="sSub"></p>
           <div class="meta">
             <div><b id="mQ"></b><span>Total soal</span></div>
             <div><b id="mT"></b><span>Menit</span></div>
-            <div><b>100</b><span>Total nilai</span></div>
+            <div><b id="mS"></b><span>Bagian</span></div>
           </div>
+          <ul class="steps">
+            <li><i>1</i><span>Masukkan kode batch dari trainer, lalu isi nama dan jabatan.</span></li>
+            <li><i>2</i><span>Soal dibagi per bagian. Gunakan panel nomor soal untuk berpindah dan tandai <b>Ragu-ragu</b> pada soal yang ingin ditinjau ulang.</span></li>
+            <li><i>3</i><span>Periksa ringkasan jawaban, lalu tekan <b>Kirim Jawaban</b> sebelum waktu habis.</span></li>
+          </ul>
         </section>
         <div>
           <form id="fCode" class="card formcard">
@@ -57,7 +63,7 @@
               required
             />
             <div class="err" id="cErr"></div>
-            <button class="btn block" id="bCode" type="submit">Lanjut</button>
+            <button class="btn block" id="bCode" type="submit">Lanjut <i data-i="chevR"></i></button>
           </form>
           <form id="fStart" class="card formcard" hidden>
             <h2>Data Peserta</h2>
@@ -85,23 +91,13 @@
             />
             <label class="f" for="copart">Copart</label
             ><input id="copart" type="text" disabled />
-            <div class="note">
-              <span>ⓘ</span
-              ><span
-                >Waktu berjalan sejak tombol ditekan dan tidak dapat dijeda.
-                Jawaban tersimpan otomatis; jika halaman tertutup atau koneksi
-                terputus, buka kembali tautan ini di perangkat yang sama untuk
-                melanjutkan.</span
-              >
-            </div>
+            <ul class="rules" id="rules"></ul>
             <div class="err" id="sErr"></div>
             <button class="btn block" id="bStart" type="submit">
               Mulai Ujian
             </button>
             <p style="text-align: center; margin: 14px 0 0">
-              <a href="#" id="bChange" class="small" style="color: var(--brand)"
-                >Ganti kode batch</a
-              >
+              <a href="#" id="bChange" class="small">Ganti kode batch</a>
             </p>
           </form>
         </div>
@@ -117,7 +113,8 @@
               src="assets/logo.png"
               alt="Logo"
               onerror="this.outerHTML = '<div class=logo>QMS</div>'"
-            /><span class="small mut" id="who"></span>
+            />
+            <div class="who"><b id="whoN"></b><span id="whoM"></span></div>
           </div>
           <div class="sp"></div>
           <div class="prog">
@@ -127,30 +124,66 @@
             >
             <div class="pbar"><i id="pBar" style="width: 0"></i></div>
           </div>
-          <div class="timer" id="timer">--:--</div>
+          <div class="timer" id="timerBox" title="Sisa waktu">
+            <i data-i="clock"></i><span id="timer">--:--</span>
+          </div>
         </div>
-        <nav class="subnav" id="subnav"></nav>
+        <nav class="subnav" id="subnav" aria-label="Bagian soal"></nav>
         <div class="net" id="net" hidden>
-          Tidak ada koneksi — Anda tetap dapat mengisi. Jawaban tersimpan di
-          perangkat ini dan akan tersinkron otomatis saat tersambung kembali.
+          <i data-i="wifiOff"></i>
+          <span>Tidak ada koneksi — Anda tetap dapat mengisi. Jawaban tersimpan di
+          perangkat ini dan akan tersinkron otomatis saat tersambung kembali.</span>
         </div>
       </header>
-      <main class="wrap" id="exam"></main>
+
+      <div class="exam-layout">
+        <main id="exam"></main>
+        <aside class="side" id="side" aria-label="Navigasi soal">
+          <div class="side-card">
+            <div class="side-h">
+              <h3><i data-i="grid"></i>Navigasi Soal</h3>
+              <div class="sp"></div>
+              <button class="m-x x" id="sideX" aria-label="Tutup"><i data-i="x"></i></button>
+            </div>
+            <div class="counts">
+              <div class="c-a"><b id="cA">0</b><span>Terjawab</span></div>
+              <div class="c-f"><b id="cF">0</b><span>Ragu-ragu</span></div>
+              <div class="c-u"><b id="cU">0</b><span>Belum</span></div>
+            </div>
+            <div class="gwrap" id="grid"></div>
+            <div class="legend">
+              <span><i class="a"></i>Terjawab</span>
+              <span><i class="f"></i>Ragu-ragu</span>
+              <span><i></i>Belum dijawab</span>
+            </div>
+            <div class="side-f">
+              <button class="btn block" id="bSubmit"><i data-i="send"></i>Kirim Jawaban</button>
+            </div>
+          </div>
+        </aside>
+      </div>
+      <button class="fab" id="fab"><i data-i="grid"></i><span id="fabTxt">Daftar soal</span></button>
+      <div class="scrim" id="scrim" hidden></div>
     </div>
 
     <main id="vDone" class="view wrap center" hidden>
-      <div class="okc">✓</div>
+      <div class="okc"><i data-i="check"></i></div>
       <h1>Jawaban Terkirim</h1>
-      <p class="mut" style="margin-top: 12px">
+      <p class="mut" style="margin-top: 12px" id="doneMsg">
         Terima kasih. Jawaban Anda telah diterima.<br />Hasil akan disampaikan
         oleh trainer. Anda dapat menutup halaman ini.
       </p>
+      <div id="result"></div>
     </main>
 
     <div class="modal" id="mConfirm" hidden>
       <div class="card">
-        <h2>Kirim jawaban?</h2>
+        <div class="m-h">
+          <h2 id="mTitle">Kirim jawaban?</h2>
+          <button class="m-x" id="mX" aria-label="Tutup"><i data-i="x"></i></button>
+        </div>
         <p class="mut" id="mInfo" style="margin: 8px 0 0"></p>
+        <div id="mSum"></div>
         <label class="ck" id="ckRow"
           ><input type="checkbox" id="ck" /><span
             >Saya menyatakan bahwa jawaban evaluasi ini merupakan hasil
@@ -158,22 +191,16 @@
           ></label
         >
         <div class="err" id="mErr"></div>
-        <div
-          id="mBtns"
-          style="
-            display: flex;
-            gap: 10px;
-            justify-content: flex-end;
-            margin-top: 8px;
-          "
-        >
+        <div class="m-f" id="mBtns">
           <button class="btn ghost" id="mNo">Kembali</button
-          ><button class="btn" id="mYes" disabled>Kirim Final</button>
+          ><button class="btn" id="mYes" disabled><i data-i="send"></i>Kirim Final</button>
         </div>
       </div>
     </div>
+    <div class="toasts" id="toasts" aria-live="polite"></div>
 
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.js"></script>
+    <script src="assets/icons.js"></script>
     <script src="assets/config.js"></script>
     <script src="assets/questions.js"></script>
     <script src="assets/participant.js"></script>

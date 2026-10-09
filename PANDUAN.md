@@ -9,10 +9,12 @@ Aplikasi statis (HTML/JS) + Supabase. Tidak ada server yang perlu Anda kelola.
 | `admin.html` | Konsol trainer (jangan dibagikan) |
 | `assets/config.js` | **Tempat Anda mengisi kredensial Supabase** |
 | `assets/questions.js` | Bank soal: 100 butir pilihan ganda (tanpa kunci) |
+| `assets/icons.js` | Ikon yang dipakai halaman peserta & admin |
 | `assets/logo.png` | **Logo Anda** (letakkan sendiri; lihat bagian Logo) |
 | `sw.js` | Menyimpan aplikasi di browser agar bisa di-refresh saat offline |
 | `supabase/schema.sql` | Tabel, keamanan (RLS), kunci jawaban & pembahasan |
 | `supabase/batch.sql` | Fitur batch per Copart |
+| `supabase/settings.sql` | Pengaturan ujian per batch (jadwal, acak soal/pilihan, nilai lulus, tampilkan nilai, wajib jawab semua, pantau tab) |
 | `supabase/update_questions.sql` | Mengganti kunci jawaban ke bank soal 100 PG (untuk instalasi yang sudah berjalan) |
 
 ## Langkah 1 — Buat project Supabase
@@ -27,12 +29,15 @@ Aplikasi statis (HTML/JS) + Supabase. Tidak ada server yang perlu Anda kelola.
 1. Buka `supabase/schema.sql`, **ganti `GANTI_EMAIL_ADMIN@perusahaan.com`** dengan email admin dari Langkah 2.
 2. Supabase → **SQL Editor → New query** → tempel seluruh isi file → **Run**. Harus muncul "Success".
 3. Cek di **Table Editor**: ada tabel `attempts`, `grading_config`, `admins`.
+4. Jalankan juga `supabase/batch.sql`, lalu `supabase/settings.sql` (urutan ini; keduanya aman diulang).
 
 > Kunci jawaban dan pembahasan tersimpan di tabel `grading_config` dan hanya bisa dibaca akun admin. Peserta tidak dapat melihatnya lewat browser.
 
 > **Sudah pernah menjalankan `schema.sql` sebelumnya?** Cukup jalankan `supabase/batch.sql` (aman dijalankan ulang). Data peserta lama tetap utuh dan tampil sebagai "Tanpa batch".
 
 > **Fitur durasi per batch memerlukan `supabase/batch.sql` dijalankan ulang** (aman diulang; instalasi lama cukup file ini).
+
+> **Instalasi yang sudah berjalan: WAJIB jalankan `supabase/settings.sql`** (setelah `batch.sql`, aman diulang) untuk mengaktifkan pengaturan ujian per batch. Data peserta & batch tidak berubah; batch lama otomatis memakai pengaturan standar (tanpa pengacakan, nilai lulus 70). Selama file ini belum dijalankan, admin tetap bisa membuat batch (nama, keterangan, durasi) dan menampilkan peringatan di tab **Batch**.
 
 > **Instalasi lama yang sekarang memakai bank soal 100 pilihan ganda: WAJIB jalankan `supabase/update_questions.sql`** di SQL Editor (aman dijalankan ulang). Tanpa ini, halaman admin menolak login dengan pesan bahwa kunci jawaban belum diperbarui. File ini hanya mengganti kunci jawaban; data peserta dan batch tidak disentuh. Peserta yang dikerjakan dengan bank soal lama ditandai **"Soal versi lama"** dan tidak ikut dinilai/dirata-rata; hapus bila hanya data uji.
 
@@ -60,8 +65,39 @@ Pilih salah satu hosting statis (gratis): Netlify (drag & drop folder), Cloudfla
 6. Di tab **Peserta**, filter **Semua batch** membatasi daftar, statistik, dan **Ekspor Excel** ke satu Copart. Excel memuat kolom Copart dan Kode Batch di setiap sheet; nama file memuat nama Copart.
 7. **Hapus batch** hanya menghapus kodenya. Data peserta tetap tersimpan dengan nama Copart-nya.
 
+## Pengaturan ujian per batch
+Klik **Batch Baru** atau tombol **Pengaturan** pada kartu batch:
+
+| Pengaturan | Keterangan |
+|---|---|
+| Durasi | 5–600 menit (tombol cepat 45/60/90/120/150). |
+| Nilai minimal lulus | 0–100, bawaan 70. Dipakai untuk status **Lulus / Belum lulus** di konsol, Excel, dan hasil peserta. |
+| Dibuka mulai / Ditutup pada | Opsional. Di luar rentang ini peserta tidak bisa **mulai**; yang sudah mulai tetap bisa menyelesaikan. Status kartu: Dibuka, Terjadwal, Jadwal berakhir, Ditutup. |
+| Acak urutan soal | Diacak di dalam tiap bagian, berbeda per peserta tetapi tetap sama saat halaman dibuka ulang. Nomor yang tampil ke peserta tetap 1, 2, 3…; di konsol admin soal selalu memakai nomor bank soal. |
+| Acak pilihan jawaban | Urutan A–D diacak per peserta. Pilihan "Semua benar"/"Ketiganya" tetap di posisinya, dan soal yang pilihannya merujuk huruf lain (mis. "A dan B") tidak diacak. Penilaian tidak terpengaruh. |
+| Tampilkan nilai ke peserta | Setelah mengirim, peserta melihat nilai, jumlah benar, kategori, dan status lulus. Dihitung di server; kunci jawaban tidak pernah dikirim ke browser peserta. Bisa diaktifkan belakangan — peserta cukup memuat ulang halaman. |
+| Wajib menjawab semua soal | Tombol kirim terkunci sampai semua soal terjawab. Saat waktu habis jawaban tetap terkirim otomatis. |
+| Catat perpindahan tab / aplikasi | Peserta diberi tahu di awal dan diingatkan setiap kali kembali. Jumlah & lama keluar halaman tampil di daftar peserta, detail, dan Excel. |
+
+Durasi, pengacakan, wajib jawab semua, dan pencatatan tab disalin ke data peserta saat ia menekan **Mulai Ujian** (perubahan berlaku untuk peserta berikutnya). Nilai lulus, tampilkan nilai, dan jadwal berlaku langsung.
+
+## Tampilan peserta
+- Soal ditampilkan **satu bagian per halaman** dengan tombol Sebelumnya/Berikutnya dan tab bagian di bagian atas.
+- **Panel navigasi soal** di kanan (di ponsel: tombol "Daftar soal" di pojok bawah) menampilkan semua nomor: biru = terjawab, oranye = ragu-ragu, putih = belum dijawab. Klik nomor untuk langsung ke soalnya.
+- Tombol **Ragu-ragu** pada tiap soal untuk menandai soal yang ingin ditinjau ulang; tanda ini ikut tersimpan dan tersinkron.
+- **Hapus jawaban** untuk mengosongkan pilihan.
+- Sebelum mengirim, ringkasan menampilkan jumlah terjawab, ragu-ragu, dan belum dijawab beserta nomor-nomornya.
+- Pengingat otomatis saat sisa waktu 10, 5, dan 1 menit.
+
+## Fitur konsol trainer
+- **Peserta**: statistik (termasuk tingkat kelulusan), pencarian, filter status, urutan (terbaru / nilai / nama), sisa waktu peserta yang sedang mengerjakan, dan tanda keluar tab.
+- **Detail peserta yang sedang mengerjakan**: **Tambah waktu** (+5/+10/+15/+30 menit; timer peserta diperbarui otomatis dalam ±30 detik) dan **Kirim paksa** (jawaban yang sudah tersinkron dikirim dan dinilai).
+- **Detail peserta selesai**: nilai, status lulus, rincian per area, filter jawaban (semua / salah-kosong / ragu-ragu), catatan trainer.
+- **Analisis Soal**: persentase benar per area dan per soal, tingkat kesulitan (Mudah ≥ 80%, Sedang 50–79%, Sulit < 50%), sebaran pilihan A–D; pengecoh yang dipilih lebih banyak daripada kunci ditandai merah.
+- **Excel**: sheet Rekap Nilai (kini dengan Nilai lulus, Lulus, Ragu-ragu, Keluar tab), Detail Jawaban, dan **Analisis Soal**.
+
 ## Logo
-Simpan logo Anda sebagai `assets/logo.png` (disarankan PNG transparan, rasio lebar ≥ tinggi, minimal 300 px lebar). Logo tampil di halaman peserta, halaman admin, dan favicon. Jika file belum ada, otomatis tampil kotak teks "QMS". Setelah mengganti logo, naikkan angka versi `exam-shell-v2` di `sw.js` (mis. `v3`) agar browser peserta memuat logo baru.
+Simpan logo Anda sebagai `assets/logo.png` (disarankan PNG transparan, rasio lebar ≥ tinggi, minimal 300 px lebar). Logo tampil di halaman peserta, halaman admin, dan favicon. Jika file belum ada, otomatis tampil kotak teks "QMS". Setelah mengganti logo, naikkan angka versi `exam-shell-v7` di `sw.js` (mis. `v8`) agar browser peserta memuat logo baru.
 
 ## Ketahanan saat koneksi putus
 - Setiap perubahan jawaban langsung disimpan di perangkat peserta, lalu disinkronkan ke Supabase otomatis (debounce 1,2 detik, ulang tiap 5 detik jika gagal, dan segera saat koneksi kembali).
@@ -86,6 +122,7 @@ Soal ada di `assets/questions.js`; kunci dan pembahasan ada di database (`gradin
 - Peserta yang menghapus data browser (cookies/site data) saat ujian berlangsung kehilangan sesi dan dianggap peserta baru; hapus entri ganda dari admin.
 - Mode penyamaran/incognito menghapus data saat ditutup, jadi minta peserta tidak memakainya.
 - Halaman admin memuat ulang data tiap 10 detik (tanpa Realtime agar setup tetap sederhana).
+- Pencatatan perpindahan tab dilakukan oleh browser peserta, jadi bersifat indikasi (bukan bukti mutlak) — misalnya notifikasi sistem atau mengunci layar juga ikut tercatat.
 
 ## Pemecahan masalah
 | Gejala | Penyebab umum |

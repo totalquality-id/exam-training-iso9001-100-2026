@@ -1,6 +1,6 @@
 // Menyimpan "cangkang" aplikasi agar halaman peserta tetap bisa dibuka/di-refresh saat koneksi putus.
-const C = "exam-shell-v6";
-const SHELL = ["./", "index.html", "assets/style.css", "assets/config.js", "assets/questions.js", "assets/participant.js", "assets/logo.png"];
+const C = "exam-shell-v7";
+const SHELL = ["./", "index.html", "assets/style.css", "assets/icons.js", "assets/config.js", "assets/questions.js", "assets/participant.js", "assets/logo.png"];
 const CDN = "https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.js";
 self.addEventListener("install", e => {
   e.waitUntil(caches.open(C).then(c => Promise.allSettled([...SHELL.map(u => c.add(u)), c.add(new Request(CDN, { mode: "no-cors" }))])).then(() => self.skipWaiting()));

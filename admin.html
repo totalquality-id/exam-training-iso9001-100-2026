@@ -9,6 +9,7 @@
 </head><body>
 <main id="vLogin" class="view login card" hidden>
   <div class="brand"><img class="logo-img" src="assets/logo.png" alt="Logo" onerror="this.outerHTML='<div class=logo>QMS</div>'"><span>Trainer Console</span></div>
+  <p class="mut small" style="margin:0 0 4px">Masuk untuk mengelola batch dan memantau peserta.</p>
   <form id="fLogin">
     <label class="f" for="em">Email</label><input id="em" type="email" required autocomplete="username">
     <label class="f" for="pw">Password</label><input id="pw" type="password" required autocomplete="current-password">
@@ -18,46 +19,91 @@
 
 <div id="vApp" class="view" hidden>
   <header class="top"><div class="in">
-    <div class="brand"><img class="logo-img" src="assets/logo.png" alt="Logo" onerror="this.outerHTML='<div class=logo>QMS</div>'"><span>Trainer Console</span></div><div class="sp"></div>
-    <span class="mut small" id="me"></span><button class="btn ghost sm" id="bOut">Keluar</button>
+    <div class="brand"><img class="logo-img" src="assets/logo.png" alt="Logo" onerror="this.outerHTML='<div class=logo>QMS</div>'"></div>
+    <nav class="ntabs" id="ntabs">
+      <button class="ntab on" data-p="list"><i data-i="users"></i><span>Peserta</span></button>
+      <button class="ntab" data-p="batch"><i data-i="layers"></i><span>Batch</span></button>
+      <button class="ntab" data-p="anal"><i data-i="chart"></i><span>Analisis Soal</span></button>
+    </nav>
+    <div class="sp"></div>
+    <span class="upd" title="Data diperbarui otomatis setiap 10 detik"><span class="live"></span><span id="upd"></span></span>
+    <button class="btn ghost sm icon" id="bRef" title="Muat ulang data"><i data-i="refresh"></i></button>
+    <div class="me"><div class="avatar" id="meA"></div><span id="me"></span></div>
+    <button class="btn ghost sm" id="bOut" title="Keluar"><i data-i="logout"></i></button>
   </div></header>
 
   <main class="wrap wide" id="vList">
-    <nav class="navtabs">
-      <button class="ntab on" data-p="list">Peserta</button><button class="ntab" data-p="batch">Batch</button>
-      <div class="sp"></div><span class="mut small" id="upd"></span>&nbsp;<button class="btn ghost sm" id="bRef">Refresh</button>
-    </nav>
-
     <section id="pgList">
+      <div class="phead">
+        <div><h1>Peserta</h1><p class="mut">Pantau progres dan nilai peserta secara langsung.</p></div>
+        <div class="ctl"><div class="selbox"><i data-i="layers"></i><select class="fb" aria-label="Filter batch"></select></div><button class="btn" id="bXls"><i data-i="download"></i><span id="bXlsT">Ekspor Excel</span></button></div>
+      </div>
       <div class="stats" id="stats"></div>
       <div class="bar">
-        <input type="search" id="qs" placeholder="Cari nama atau jabatan…">
-        <select id="fb"><option value="all">Semua batch</option></select>
-        <select id="fs"><option value="all">Semua status</option><option value="in_progress">Mengerjakan</option><option value="done">Selesai</option></select>
-        <div class="sp"></div><button class="btn sm" id="bXls">Ekspor Excel</button>
+        <div class="search"><i data-i="search"></i><input type="search" id="qs" placeholder="Cari nama, jabatan, atau Copart…"></div>
+        <div class="seg" id="fs"><button class="on" data-v="all">Semua</button><button data-v="in_progress">Mengerjakan</button><button data-v="done">Selesai</button></div>
+        <div class="sp"></div>
+        <select id="sort" aria-label="Urutkan"><option value="new">Terbaru</option><option value="score">Nilai tertinggi</option><option value="low">Nilai terendah</option><option value="name">Nama A–Z</option></select>
       </div>
       <div class="tw"><table><thead><tr><th>Peserta</th><th>Status</th><th>Progres</th><th>Mulai</th><th>Aktivitas terakhir</th><th>Durasi</th><th>Nilai</th></tr></thead><tbody id="tb"></tbody></table></div>
+      <div style="height:60px"></div>
     </section>
 
     <section id="pgBatch" hidden>
-      <div class="card" style="margin:24px 0">
-        <h2>Buat Batch Baru</h2><p class="mut small" style="margin:4px 0 16px">Satu batch untuk satu Copart. Kode 6 angka dibuat otomatis dan dibagikan ke peserta.</p>
-        <div class="frow">
-          <div><label class="f" for="bnName">Nama Copart</label><input id="bnName" type="text" maxlength="120" placeholder="Contoh: PT Sinar Jaya Abadi"></div>
-          <div><label class="f" for="bnNote">Keterangan (opsional)</label><input id="bnNote" type="text" maxlength="200" placeholder="Contoh: Angkatan 1 · 14 Oktober"></div>
-          <div><label class="f" for="bnMin">Durasi (menit)</label><input id="bnMin" type="number" min="5" max="600" step="1" value="90" style="width:110px"></div>
-          <button class="btn" id="bnAdd">Buat Batch</button>
-        </div>
-        <div class="err" id="bnErr"></div><div id="bnOk"></div>
+      <div class="phead">
+        <div><h1>Batch</h1><p class="mut">Satu batch untuk satu Copart. Atur durasi, jadwal, dan aturan ujian per batch.</p></div>
+        <div class="ctl"><button class="btn" id="bNew"><i data-i="plus"></i>Batch Baru</button></div>
       </div>
-      <div class="tw"><table><thead><tr><th>Copart</th><th>Kode</th><th>Durasi</th><th>Status</th><th>Peserta</th><th>Dibuat</th><th></th></tr></thead><tbody id="bt"></tbody></table></div>
+      <div id="bWarn"></div>
+      <div id="bnOk"></div>
+      <div class="bgrid" id="bt"></div>
+      <div style="height:60px"></div>
+    </section>
+
+    <section id="pgAnal" hidden>
+      <div class="phead">
+        <div><h1>Analisis Soal</h1><p class="mut">Tingkat kesulitan dan sebaran jawaban tiap soal, dari peserta yang sudah mengirim.</p></div>
+        <div class="ctl"><div class="selbox"><i data-i="layers"></i><select class="fb" aria-label="Filter batch"></select></div></div>
+      </div>
+      <div id="anal"></div>
+      <div style="height:60px"></div>
     </section>
   </main>
 
   <main class="wrap wide" id="vDet" hidden></main>
 </div>
 
+<div class="modal" id="mBatch" hidden>
+  <div class="card lg">
+    <div class="m-h"><div><h2 id="mbTitle">Batch Baru</h2><p class="mut small" id="mbSub" style="margin:4px 0 0"></p></div><button class="m-x" id="mbX" type="button" aria-label="Tutup"><i data-i="x"></i></button></div>
+    <form id="fBatch">
+      <div class="fgrid">
+        <div><label class="f" for="bnName">Nama Copart</label><input id="bnName" type="text" maxlength="120" required placeholder="Contoh: PT Sinar Jaya Abadi"></div>
+        <div><label class="f" for="bnNote">Keterangan (opsional)</label><input id="bnNote" type="text" maxlength="200" placeholder="Contoh: Angkatan 1 · 14 Oktober"></div>
+      </div>
+      <div class="fsec">
+        <h4><i data-i="clock"></i>Waktu &amp; penilaian</h4>
+        <div class="fgrid">
+          <div><label class="f" for="bnMin">Durasi pengerjaan (menit)</label><input id="bnMin" type="number" min="5" max="600" step="1" value="90">
+            <div class="presets" id="presets"><button type="button" data-m="45">45</button><button type="button" data-m="60">60</button><button type="button" data-m="90">90</button><button type="button" data-m="120">120</button><button type="button" data-m="150">150</button></div></div>
+          <div><label class="f" for="bnPass">Nilai minimal lulus (0–100)</label><input id="bnPass" type="number" min="0" max="100" step="1" value="70"><div class="hint">Dipakai untuk status Lulus / Belum lulus di konsol, Excel, dan hasil peserta.</div></div>
+          <div><label class="f" for="bnFrom">Dibuka mulai (opsional)</label><input id="bnFrom" type="datetime-local"></div>
+          <div><label class="f" for="bnUntil">Ditutup pada (opsional)</label><input id="bnUntil" type="datetime-local"></div>
+        </div>
+        <div class="hint">Jadwal hanya membatasi kapan peserta dapat <b>mulai</b>. Peserta yang sudah mulai tetap dapat menyelesaikan ujiannya.</div>
+      </div>
+      <div class="fsec">
+        <h4><i data-i="sliders"></i>Aturan ujian</h4>
+        <div class="toggles" id="toggles"></div>
+      </div>
+      <div class="alert info" id="mbNote"></div>
+      <div class="err" id="bnErr"></div>
+      <div class="m-f"><button type="button" class="btn ghost" id="mbNo">Batal</button><button class="btn" id="bnAdd" type="submit">Buat Batch</button></div>
+    </form>
+  </div>
+</div>
+
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/exceljs/4.4.0/exceljs.min.js"></script>
-<script src="assets/config.js"></script><script src="assets/questions.js"></script><script src="assets/admin.js"></script>
+<script src="assets/icons.js"></script><script src="assets/config.js"></script><script src="assets/questions.js"></script><script src="assets/admin.js"></script>
 </body></html>

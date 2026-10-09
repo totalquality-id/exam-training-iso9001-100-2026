@@ -1,18 +1,33 @@
 (() => {
-const E = window.EXAM, CFG = window.APP_CONFIG;
-const $ = s => document.querySelector(s);
+const E = window.EXAM, CFG = window.APP_CONFIG, ic = window.ic, L = "ABCD";
+const $ = s => document.querySelector(s), $$ = s => document.querySelectorAll(s);
 const esc = s => String(s ?? "").replace(/[&<>"]/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));
 const view = id => document.querySelectorAll(".view").forEach(v => v.hidden = v.id !== id);
 const ST = { in_progress: "Mengerjakan", submitted: "Selesai", graded: "Selesai" };
 const REM = { CTX: "Workshop 2 — Context & Climate Relevance Lab", LDR: "Workshop 3 — Quality Culture Challenge", "R&O": "Workshop 4 — Risk & Opportunity War Room", SUP: "Workshop 5 — Knowledge Risk Map", OPS: "Workshop 6 — Customer Promise Challenge" };
 const fmtD = d => d ? new Date(d).toLocaleString("id-ID", { dateStyle: "short", timeStyle: "short" }) : "—";
 const mins = a => a.submitted_at ? Math.round((new Date(a.submitted_at) - new Date(a.started_at)) / 6000) / 10 : null;
+const initials = n => String(n || "?").trim().split(/\s+/).slice(0, 2).map(w => w[0]).join("").toUpperCase();
+const num = v => v === null || v === undefined || v === "" || isNaN(+v) ? null : +v;
+const toLocal = d => { if (!d) return ""; const x = new Date(d); x.setMinutes(x.getMinutes() - x.getTimezoneOffset()); return x.toISOString().slice(0, 16); };
+const fromLocal = v => v ? new Date(v).toISOString() : null;
 
-// peta pertanyaan: nomor -> {area, text, opts}
+// Aturan ujian yang dapat diatur per batch
+const OPTS = [
+  ["shuffle_q", "Acak urutan soal", "Urutan soal diacak di dalam tiap bagian, berbeda untuk setiap peserta. Nomor yang tampil tetap berurutan."],
+  ["shuffle_opt", "Acak pilihan jawaban", "Urutan pilihan A–D diacak per peserta. Pilihan seperti “Semua benar” tetap di posisinya."],
+  ["show_score", "Tampilkan nilai ke peserta", "Setelah mengirim, peserta melihat nilai, jumlah benar, dan status lulus. Kunci jawaban tetap tidak ditampilkan."],
+  ["require_all", "Wajib menjawab semua soal", "Tombol kirim terkunci sampai semua soal terjawab. Saat waktu habis jawaban tetap terkirim otomatis."],
+  ["track_focus", "Catat perpindahan tab / aplikasi", "Peserta diberi tahu di awal; jumlah dan lama keluar dari halaman ujian tampil di konsol ini."],
+];
+const DEF = { shuffle_q: false, shuffle_opt: true, show_score: false, require_all: false, track_focus: true, pass_mark: 70 };
+const OPT_CHIP = { shuffle_q: ["shuffle", "Acak soal"], shuffle_opt: ["shuffle", "Acak pilihan"], show_score: ["eye", "Nilai tampil"], require_all: ["check", "Wajib semua"], track_focus: ["monitor", "Pantau tab"] };
+
+// peta pertanyaan: nomor -> {text, opts}
 const Q = {};
 E.mc.forEach(([n, q, o]) => Q[n] = { text: q, opts: o });
 
-let sb, cfg, rows = [], batches = [], cur = null, poll, bf = "all";
+let sb, cfg, rows = [], batches = [], cur = null, poll, bf = "all", fsv = "all", hasSettings = true, editId = null, an = { sort: "no", area: "all" };
 
 async function init() {
   if (!CFG.SUPABASE_URL || CFG.SUPABASE_URL.startsWith("GANTI")) { view("vLogin"); $("#lErr").textContent = "Isi assets/config.js terlebih dahulu."; return; }
@@ -31,21 +46,34 @@ async function enter(email) {
   if (!data) { await sb.auth.signOut(); view("vLogin"); $("#lErr").textContent = "Akun ini bukan admin, atau skema database belum dijalankan."; return; }
   cfg = data.config;
   if (!cfg || cfg.version !== E.version || !cfg.mc) { await sb.auth.signOut(); view("vLogin"); $("#lErr").textContent = "Kunci jawaban di database belum sesuai dengan bank soal baru. Jalankan supabase/update_questions.sql di Supabase → SQL Editor, lalu login ulang."; return; }
-  $("#me").textContent = email; view("vApp"); await load(); poll = setInterval(load, 10000);
+  const probe = await sb.from("batches").select("settings,open_from,open_until").limit(1);
+  hasSettings = !probe.error;
+  $("#me").textContent = email; $("#meA").textContent = initials(email.split("@")[0].replace(/[._-]+/g, " "));
+  view("vApp"); await load(); poll = setInterval(load, 10000);
 }
 $("#bOut").onclick = async () => { clearInterval(poll); await sb.auth.signOut(); location.reload(); };
-$("#bRef").onclick = load; $("#qs").oninput = $("#fs").onchange = renderList;
-$("#fb").onchange = e => { bf = e.target.value; setXlsLabel(); renderList(); };
-document.querySelectorAll(".ntab").forEach(b => b.onclick = () => go(b.dataset.p));
+$("#bRef").onclick = load;
+$("#qs").oninput = $("#sort").onchange = () => renderList();
+$("#fs").onclick = e => { const b = e.target.closest("button"); if (!b) return; fsv = b.dataset.v; $$("#fs button").forEach(x => x.classList.toggle("on", x === b)); renderList(); };
+$$(".fb").forEach(s => s.onchange = e => setBf(e.target.value));
+$$(".ntab").forEach(b => b.onclick = () => go(b.dataset.p));
+function setBf(v) { bf = v; $$(".fb").forEach(s => s.value = v); setXlsLabel(); renderList(); if (!$("#pgAnal").hidden) renderAnal(); }
 function go(p) {
-  document.querySelectorAll(".ntab").forEach(b => b.classList.toggle("on", b.dataset.p === p));
-  $("#pgList").hidden = p !== "list"; $("#pgBatch").hidden = p !== "batch"; if (p === "batch") renderBatches();
+  if (cur) { cur = null; $("#vDet").hidden = true; $("#vList").hidden = false; }
+  $$(".ntab").forEach(b => b.classList.toggle("on", b.dataset.p === p));
+  $("#pgList").hidden = p !== "list"; $("#pgBatch").hidden = p !== "batch"; $("#pgAnal").hidden = p !== "anal";
+  if (p === "batch") renderBatches(); if (p === "anal") renderAnal(); if (p === "list") renderList();
+  window.scrollTo(0, 0);
 }
 const batchRows = () => bf === "all" ? rows : bf === "none" ? rows.filter(r => !r.batch_id) : rows.filter(r => r.batch_id === bf);
-const bcode = id => (batches.find(b => b.id === id) || {}).code || "";
-const setXlsLabel = () => $("#bXls").textContent = bf === "all" ? "Ekspor Excel (semua batch)" : "Ekspor Excel (batch terpilih)";
+const bOf = id => batches.find(b => b.id === id);
+const bcode = id => (bOf(id) || {}).code || "";
+const setXlsLabel = () => $("#bXlsT").textContent = bf === "all" ? "Ekspor Excel (semua)" : "Ekspor Excel (batch ini)";
 const pubUrl = code => new URL("./?kode=" + code, location.href).href;
-const copy = async (t, btn) => { try { await navigator.clipboard.writeText(t); } catch { prompt("Salin teks berikut:", t); return; } const o = btn.textContent; btn.textContent = "Tersalin ✓"; setTimeout(() => btn.textContent = o, 1400); };
+const copy = async (t, btn) => {
+  try { await navigator.clipboard.writeText(t); } catch { prompt("Salin teks berikut:", t); return; }
+  const o = btn.innerHTML; btn.innerHTML = ic("check") + (btn.classList.contains("icon") ? "" : "Tersalin"); setTimeout(() => btn.innerHTML = o, 1400);
+};
 
 async function load() {
   const [a, b] = await Promise.all([
@@ -53,20 +81,29 @@ async function load() {
     sb.from("batches").select("*").order("created_at", { ascending: false })]);
   if (a.error) return $("#upd").textContent = "Gagal memuat: " + a.error.message;
   rows = a.data; batches = b.data || [];
-  $("#upd").textContent = b.error ? "Jalankan supabase/batch.sql terlebih dahulu" : "Diperbarui " + new Date().toLocaleTimeString("id-ID");
-  renderBatchFilter(); renderList(); if (!$("#pgBatch").hidden) renderBatches();
-  if (cur) { const x = rows.find(r => r.id === cur.a.id); if (x && x.status !== cur.a.status && cur.a.status === "in_progress") openDet(x.id); }
+  $("#upd").textContent = b.error ? "Jalankan supabase/batch.sql terlebih dahulu" : "Diperbarui " + new Date().toLocaleTimeString("id-ID", { hour: "2-digit", minute: "2-digit", second: "2-digit" });
+  renderBatchFilter();
+  if (!$("#pgList").hidden) renderList(); if (!$("#pgBatch").hidden) renderBatches(); if (!$("#pgAnal").hidden && !$("#vList").hidden) renderAnal();
+  if (cur) {
+    const x = rows.find(r => r.id === cur.a.id);
+    if (x && cur.a.status === "in_progress" && (x.status !== cur.a.status || x.last_saved_at !== cur.a.last_saved_at || x.duration_minutes !== cur.a.duration_minutes)) openDet(x.id, true);
+  }
 }
 function renderBatchFilter() {
-  const sel = $("#fb"), v = bf;
-  sel.innerHTML = `<option value="all">Semua batch</option>` + batches.map(b => `<option value="${b.id}">${esc(b.copart)} · ${esc(b.code)}</option>`).join("") + (rows.some(r => !r.batch_id) ? `<option value="none">Tanpa batch (data lama)</option>` : "");
-  sel.value = [...sel.options].some(o => o.value === v) ? v : "all"; bf = sel.value; setXlsLabel();
+  const v = bf, opts = `<option value="all">Semua batch</option>` + batches.map(b => `<option value="${b.id}">${esc(b.copart)} · ${esc(b.code)}</option>`).join("") + (rows.some(r => !r.batch_id) ? `<option value="none">Tanpa batch (data lama)</option>` : "");
+  $$(".fb").forEach(sel => { sel.innerHTML = opts; sel.value = [...sel.options].some(o => o.value === v) ? v : "all"; });
+  bf = $(".fb").value; setXlsLabel();
 }
 
 // ---- perhitungan nilai (otomatis: 1 poin per soal) ----
 function cat(t) { return t >= 90 ? "EXCELLENT" : t >= 80 ? "VERY GOOD / COMPETENT" : t >= 70 ? "COMPETENT" : t >= 60 ? "NEEDS IMPROVEMENT" : "NOT YET COMPETENT"; }
 const isCur = a => (a.answers || {}).v === E.version;          // dikerjakan dengan bank soal yang berlaku sekarang
 const scored = a => a.status !== "in_progress";
+const passMark = a => num(((bOf(a.batch_id) || {}).settings || {}).pass_mark) ?? num((a.settings || {}).pass_mark) ?? 70;   // nilai lulus terbaru dari batch
+const evOf = a => (a.answers || {}).ev || {};
+const flOf = a => ((a.answers || {}).fl || []).map(Number);
+const leftMin = a => Math.max(0, Math.ceil((new Date(a.started_at).getTime() + (a.duration_minutes || E.minutes) * 60000 - Date.now()) / 60000));
+const away = s => s >= 60 ? Math.round(s / 60) + " mnt" : (s || 0) + " dtk";
 function calc(a) {
   if (!isCur(a)) return null;
   const mc = (a.answers || {}).mc || {}, comp = {}, N = Object.keys(cfg.mc).length; let right = 0;
@@ -74,127 +111,237 @@ function calc(a) {
     const ok = String(mc[n] || "").toUpperCase() === k, c = (cfg.comp || {})[n] || "—";
     comp[c] = comp[c] || { got: 0, max: 0 }; comp[c].max++; if (ok) { comp[c].got++; right++; }
   }
-  const total = Math.round(right / N * 1000) / 10;
-  return { total, right, N, comp, cat: cat(total) };
+  const total = Math.round(right / N * 1000) / 10, pm = passMark(a);
+  return { total, right, N, comp, cat: cat(total), pass: total >= pm, pm };
 }
+const passBadge = c => `<span class="badge ${c.pass ? "b-ok" : "b-bad"}">${c.pass ? "Lulus" : "Belum lulus"}</span>`;
+const stat = (label, value, icon, sub, cls, hl) => `<div class="stat${hl ? " hl" : ""}"><div class="si ${cls || ""}">${ic(icon)}</div><span>${label}</span><b>${value}</b>${sub ? `<small>${sub}</small>` : ""}</div>`;
 
-// ---- daftar ----
+// ---- daftar peserta ----
 function renderList() {
-  const base = batchRows(), fin = base.filter(r => scored(r) && isCur(r)), avg = fin.length ? (fin.reduce((t, r) => t + calc(r).total, 0) / fin.length).toFixed(1) : "—";
-  const cnt = st => base.filter(r => r.status === st).length;
-  $("#stats").innerHTML = [["Total peserta", base.length], ["Mengerjakan", cnt("in_progress")], ["Selesai", base.length - cnt("in_progress")], ["Rata-rata nilai", avg]]
-    .map(([l, v]) => `<div class="stat"><span>${l}</span><b>${v}</b></div>`).join("");
-  const q = $("#qs").value.toLowerCase(), f = $("#fs").value;
-  const list = base.filter(r => (f === "all" || (f === "done" ? r.status !== "in_progress" : r.status === f)) && (r.name + " " + r.job_title + " " + (r.copart || "")).toLowerCase().includes(q));
+  const base = batchRows(), fin = base.filter(r => scored(r) && isCur(r)), cs = fin.map(calc);
+  const avg = cs.length ? (cs.reduce((t, c) => t + c.total, 0) / cs.length).toFixed(1) : "—", top = cs.length ? Math.max(...cs.map(c => c.total)) : null;
+  const passN = cs.filter(c => c.pass).length, prog = base.filter(r => r.status === "in_progress").length;
+  $("#stats").innerHTML = stat("Total peserta", base.length, "users", `${fin.length} sudah dinilai`)
+    + stat("Mengerjakan", prog, "clock", prog ? "sedang berlangsung" : "tidak ada yang aktif", "w")
+    + stat("Selesai", base.length - prog, "check", base.length ? Math.round((base.length - prog) / base.length * 100) + "% dari peserta" : "", "o")
+    + stat("Rata-rata nilai", avg, "chart", top !== null ? "tertinggi " + top : "")
+    + stat("Tingkat kelulusan", cs.length ? Math.round(passN / cs.length * 100) + "%" : "—", "award", cs.length ? `${passN} dari ${cs.length} lulus` : "belum ada nilai", "", true);
+  const q = $("#qs").value.toLowerCase(), so = $("#sort").value;
+  let list = base.filter(r => (fsv === "all" || (fsv === "done" ? r.status !== "in_progress" : r.status === fsv)) && (r.name + " " + r.job_title + " " + (r.copart || "")).toLowerCase().includes(q));
+  const sc = r => scored(r) && isCur(r) ? calc(r).total : -1;
+  if (so === "score") list = [...list].sort((a, b) => sc(b) - sc(a));
+  if (so === "low") list = [...list].sort((a, b) => (sc(a) < 0 ? 999 : sc(a)) - (sc(b) < 0 ? 999 : sc(b)));
+  if (so === "name") list = [...list].sort((a, b) => a.name.localeCompare(b.name, "id"));
   $("#tb").innerHTML = list.length ? list.map(r => {
-    const legacy = scored(r) && !isCur(r), c = scored(r) ? calc(r) : null, pct = Math.round((r.answered_count || 0) / E.total * 100);
-    return `<tr class="cl" data-id="${r.id}"><td><div class="b">${esc(r.name)}</div><div class="mut small">${esc(r.job_title)}${r.copart ? " · " + esc(r.copart) : ""}</div></td>
-      <td><span class="badge ${r.status === "in_progress" ? "b-in_progress" : "b-graded"}">${ST[r.status]}</span></td>
-      <td>${legacy ? "—" : `<div class="pb"><div class="pbar"><i style="width:${pct}%"></i></div><span class="small">${r.answered_count || 0}/${E.total}</span></div>`}</td>
+    const legacy = scored(r) && !isCur(r), c = scored(r) ? calc(r) : null, pct = Math.round((r.answered_count || 0) / E.total * 100), ev = evOf(r), fl = flOf(r).length, live = r.status === "in_progress";
+    return `<tr class="cl" data-id="${r.id}"><td><div class="pname"><div class="avatar">${esc(initials(r.name))}</div><div><div class="b">${esc(r.name)}</div><div class="mut small">${esc(r.job_title)}${r.copart ? " · " + esc(r.copart) : ""}</div>
+        ${ev.blur ? `<span class="chip warn" style="margin-top:4px" title="Keluar dari halaman ujian ${ev.blur} kali, total ${away(ev.away)}">${ic("monitor")}${ev.blur}× keluar tab</span>` : ""}</div></div></td>
+      <td><span class="badge ${live ? "b-in_progress" : "b-graded"}">${ST[r.status]}</span></td>
+      <td>${legacy ? "—" : `<div class="pb"><div class="pbar"><i style="width:${pct}%"></i></div><span class="small">${r.answered_count || 0}/${E.total}</span></div>
+        ${live ? `<div class="xs mut" style="margin-top:4px">${ic("clock")} sisa ${leftMin(r)} mnt${fl ? ` · ${fl} ragu-ragu` : ""}</div>` : ""}`}</td>
       <td class="small">${fmtD(r.started_at)}</td><td class="small">${fmtD(r.submitted_at || r.last_saved_at)}</td>
       <td class="small">${mins(r) !== null ? mins(r) + " mnt" : "—"}</td>
-      <td>${c ? `<b>${c.total}</b><span class="mut small"> /100</span><div class="small mut">${c.cat}</div>` : legacy ? `<span class="mut small">Soal versi lama</span>` : "—"}</td></tr>`;
-  }).join("") : `<tr><td colspan="7" class="mut" style="text-align:center;padding:32px">Belum ada peserta.</td></tr>`;
-  document.querySelectorAll("tr.cl").forEach(tr => tr.onclick = () => openDet(tr.dataset.id));
+      <td class="nw">${c ? `<b style="font-size:16px">${c.total}</b><span class="mut small"> /100</span> ${passBadge(c)}<div class="xs mut">${c.cat}</div>` : legacy ? `<span class="mut small">Soal versi lama</span>` : "—"}</td></tr>`;
+  }).join("") : `<tr><td colspan="7"><div class="empty">${ic("users")}<div>${base.length ? "Tidak ada peserta yang cocok dengan filter." : "Belum ada peserta. Bagikan kode batch untuk memulai."}</div></div></td></tr>`;
+  $$("tr.cl").forEach(tr => tr.onclick = () => openDet(tr.dataset.id));
 }
 
 // ---- batch ----
+function bState(b) {
+  const now = Date.now();
+  if (!b.is_open) return ["Ditutup", "b-mut"];
+  if (b.open_from && now < new Date(b.open_from).getTime()) return ["Terjadwal", "b-info"];
+  if (b.open_until && now > new Date(b.open_until).getTime()) return ["Jadwal berakhir", "b-mut"];
+  return ["Dibuka", "b-ok"];
+}
 function renderBatches() {
+  $("#bWarn").innerHTML = hasSettings ? "" : `<div class="alert">${ic("alert")}<div><b>Pengaturan ujian belum aktif.</b> Jalankan <code>supabase/settings.sql</code> di Supabase → SQL Editor (aman diulang) untuk mengaktifkan jadwal, pengacakan, nilai lulus, tampilkan nilai, dan pencatatan tab. Setelah itu muat ulang halaman ini.</div></div>`;
   $("#bt").innerHTML = batches.length ? batches.map(b => {
-    const p = rows.filter(r => r.batch_id === b.id), sub = p.filter(r => r.status !== "in_progress").length;
-    return `<tr><td><div class="b">${esc(b.copart)}</div>${b.note ? `<div class="mut small">${esc(b.note)}</div>` : ""}</td>
-      <td><span class="code">${esc(b.code)}</span></td>
-      <td class="small">${b.duration_minutes || E.minutes} mnt</td>
-      <td><span class="badge ${b.is_open ? "b-graded" : "b-in_progress"}">${b.is_open ? "Dibuka" : "Ditutup"}</span></td>
-      <td>${p.length} peserta<div class="mut small">${sub} sudah submit</div></td><td class="small">${fmtD(b.created_at)}</td>
-      <td class="acts"><button class="btn ghost sm" data-a="code" data-id="${b.id}">Salin kode</button><button class="btn ghost sm" data-a="link" data-id="${b.id}">Salin tautan</button>
-      <button class="btn ghost sm" data-a="view" data-id="${b.id}">Lihat peserta</button><button class="btn ghost sm" data-a="toggle" data-id="${b.id}">${b.is_open ? "Tutup batch" : "Buka batch"}</button>
-      <button class="btn danger sm" data-a="del" data-id="${b.id}">Hapus</button></td></tr>`;
-  }).join("") : `<tr><td colspan="7" class="mut" style="text-align:center;padding:32px">Belum ada batch. Buat batch pertama di atas.</td></tr>`;
-  $("#bt").querySelectorAll("button[data-a]").forEach(btn => btn.onclick = () => batchAct(btn.dataset.a, batches.find(b => b.id === btn.dataset.id), btn));
+    const p = rows.filter(r => r.batch_id === b.id), sub = p.filter(r => r.status !== "in_progress"), cs = sub.filter(isCur).map(calc);
+    const avg = cs.length ? (cs.reduce((t, c) => t + c.total, 0) / cs.length).toFixed(1) : "—", s = b.settings || {}, [stT, stC] = bState(b);
+    const chips = [`<span class="chip on">${ic("clock")}${b.duration_minutes || E.minutes} mnt</span>`];
+    if (hasSettings) {
+      chips.push(`<span class="chip">${ic("award")}Lulus ≥ ${num(s.pass_mark) ?? 70}</span>`);
+      Object.entries(OPT_CHIP).forEach(([k, [i, t]]) => s[k] && chips.push(`<span class="chip">${ic(i)}${t}</span>`));
+      if (b.open_from || b.open_until) chips.push(`<span class="chip">${ic("calendar")}${b.open_from ? fmtD(b.open_from) : "…"} – ${b.open_until ? fmtD(b.open_until) : "…"}</span>`);
+    }
+    return `<div class="bc ${b.is_open ? "" : "off"}">
+      <div class="bc-top"><div><h3>${esc(b.copart)}</h3><p>${b.note ? esc(b.note) : "Dibuat " + fmtD(b.created_at)}</p></div><span class="badge ${stC}">${stT}</span></div>
+      <div class="bc-code"><span class="code">${esc(b.code)}</span><button class="btn ghost sm icon" data-a="code" data-id="${b.id}" title="Salin kode">${ic("copy")}</button><button class="btn ghost sm icon" data-a="link" data-id="${b.id}" title="Salin tautan peserta">${ic("link")}</button></div>
+      <div class="bc-meta"><div class="chips">${chips.join("")}</div></div>
+      <div class="bc-stats"><div><b>${p.length}</b><span>Peserta</span></div><div><b>${sub.length}</b><span>Sudah kirim</span></div><div><b>${avg}</b><span>Rata-rata</span></div></div>
+      <div class="bc-act"><button class="btn soft sm" data-a="view" data-id="${b.id}">${ic("users")}Peserta</button><button class="btn ghost sm" data-a="edit" data-id="${b.id}">${ic("sliders")}Pengaturan</button>
+        <button class="btn ghost sm" data-a="toggle" data-id="${b.id}">${ic(b.is_open ? "lock" : "unlock")}${b.is_open ? "Tutup" : "Buka"}</button><div class="sp"></div>
+        <button class="btn danger sm icon" data-a="del" data-id="${b.id}" title="Hapus batch">${ic("trash")}</button></div></div>`;
+  }).join("") : `<div class="card empty" style="grid-column:1/-1">${ic("layers")}<h3 style="margin:4px 0 6px;color:var(--ink)">Belum ada batch</h3><p style="margin:0 0 16px">Buat batch pertama untuk mendapatkan kode 6 angka yang dibagikan ke peserta.</p><button class="btn" data-a="new">${ic("plus")}Buat Batch</button></div>`;
+  $$("#bt button[data-a]").forEach(btn => btn.onclick = () => batchAct(btn.dataset.a, bOf(btn.dataset.id), btn));
 }
 async function batchAct(a, b, btn) {
+  if (a === "new") return openBatch();
   if (a === "code") return copy(b.code, btn);
   if (a === "link") return copy(pubUrl(b.code), btn);
-  if (a === "view") { bf = b.id; $("#fb").value = b.id; setXlsLabel(); go("list"); return renderList(); }
+  if (a === "edit") return openBatch(b);
+  if (a === "view") { go("list"); return setBf(b.id); }
   if (a === "toggle") { const { error } = await sb.from("batches").update({ is_open: !b.is_open }).eq("id", b.id); if (error) return alert("Gagal: " + error.message); return load(); }
   if (a === "del") {
     if (!confirm(`Hapus batch "${b.copart}" (kode ${b.code})?\nData peserta tetap tersimpan, tetapi kode ini tidak bisa dipakai lagi.`)) return;
     const { error } = await sb.from("batches").delete().eq("id", b.id); if (error) return alert("Gagal: " + error.message); if (bf === b.id) bf = "all"; return load();
   }
 }
-$("#bnAdd").onclick = async () => {
-  const name = $("#bnName").value.trim(); $("#bnErr").textContent = ""; $("#bnOk").innerHTML = "";
-  if (name.length < 2) return $("#bnErr").textContent = "Isi nama Copart (minimal 2 karakter).";
-  const min = Number($("#bnMin").value);
-  if (!Number.isInteger(min) || min < 5 || min > 600) return $("#bnErr").textContent = "Durasi harus berupa bilangan bulat antara 5 dan 600 menit.";
+
+// ---- form batch (buat & ubah pengaturan) ----
+$("#toggles").innerHTML = OPTS.map(([k, t, d]) => `<label class="tg"><div class="tx"><b>${t}</b><span>${d}</span></div><span class="sw"><input type="checkbox" id="o_${k}"><i></i></span></label>`).join("");
+const syncPresets = () => $$("#presets button").forEach(b => b.classList.toggle("on", b.dataset.m === $("#bnMin").value));
+$("#presets").onclick = e => { const b = e.target.closest("button"); if (b) { $("#bnMin").value = b.dataset.m; syncPresets(); } };
+$("#bnMin").oninput = syncPresets;
+function openBatch(b) {
+  editId = b ? b.id : null;
+  const s = Object.assign({}, DEF, b ? Object.assign({ shuffle_opt: false, track_focus: false }, b.settings || {}) : {});
+  $("#mbTitle").textContent = b ? "Pengaturan Batch" : "Batch Baru";
+  $("#mbSub").textContent = b ? `${b.copart} · kode ${b.code}` : "Kode 6 angka dibuat otomatis dan dibagikan ke peserta.";
+  $("#bnName").value = b ? b.copart : ""; $("#bnNote").value = b ? b.note || "" : "";
+  $("#bnMin").value = b ? b.duration_minutes || E.minutes : E.minutes; $("#bnPass").value = num(s.pass_mark) ?? 70;
+  $("#bnFrom").value = b ? toLocal(b.open_from) : ""; $("#bnUntil").value = b ? toLocal(b.open_until) : "";
+  OPTS.forEach(([k]) => { const el = $("#o_" + k); el.checked = !!s[k]; el.disabled = !hasSettings; });
+  ["#bnPass", "#bnFrom", "#bnUntil"].forEach(id => $(id).disabled = !hasSettings);
+  $("#mbNote").innerHTML = ic("info") + `<span>${!hasSettings ? "Jadwal, nilai lulus, dan aturan ujian memerlukan <code>supabase/settings.sql</code>. Saat ini hanya nama, keterangan, dan durasi yang disimpan."
+    : b ? "Durasi, pengacakan, wajib jawab semua, dan pencatatan tab berlaku untuk peserta yang <b>mulai setelah</b> perubahan disimpan. Nilai lulus, tampilkan nilai, dan jadwal berlaku langsung."
+    : "Semua pengaturan dapat diubah nanti lewat tombol <b>Pengaturan</b> pada kartu batch."}</span>`;
+  $("#bnAdd").textContent = b ? "Simpan Perubahan" : "Buat Batch"; $("#bnErr").textContent = "";
+  syncPresets(); $("#mBatch").hidden = false; $("#bnName").focus();
+}
+const closeBatch = () => $("#mBatch").hidden = true;
+$("#bNew").onclick = () => openBatch(); $("#mbX").onclick = $("#mbNo").onclick = closeBatch;
+document.addEventListener("keydown", e => { if (e.key === "Escape" && !$("#mBatch").hidden) closeBatch(); });
+$("#fBatch").addEventListener("submit", async e => {
+  e.preventDefault(); const err = m => $("#bnErr").textContent = m; err("");
+  const name = $("#bnName").value.trim(), note = $("#bnNote").value.trim(), min = Number($("#bnMin").value), pm = Number($("#bnPass").value);
+  const from = fromLocal($("#bnFrom").value), until = fromLocal($("#bnUntil").value);
+  if (name.length < 2) return err("Isi nama Copart (minimal 2 karakter).");
+  if (!Number.isInteger(min) || min < 5 || min > 600) return err("Durasi harus berupa bilangan bulat antara 5 dan 600 menit.");
+  if (hasSettings && (!Number.isFinite(pm) || pm < 0 || pm > 100)) return err("Nilai minimal lulus harus antara 0 dan 100.");
+  if (hasSettings && from && until && new Date(until) <= new Date(from)) return err("Waktu tutup harus setelah waktu buka.");
+  const settings = { pass_mark: pm }; OPTS.forEach(([k]) => settings[k] = $("#o_" + k).checked);
   $("#bnAdd").disabled = true;
-  const { data, error } = await sb.rpc("create_batch", { p_copart: name, p_note: $("#bnNote").value, p_minutes: min });
+  let data, error;
+  if (editId) {
+    const p = { copart: name, note: note || null, duration_minutes: min };
+    if (hasSettings) Object.assign(p, { settings, open_from: from, open_until: until });
+    ({ data, error } = await sb.from("batches").update(p).eq("id", editId).select().single());
+  } else {
+    ({ data, error } = await sb.rpc("create_batch", hasSettings ? { p_copart: name, p_note: note, p_minutes: min, p_settings: settings, p_open_from: from, p_open_until: until } : { p_copart: name, p_note: note, p_minutes: min }));
+  }
   $("#bnAdd").disabled = false;
-  if (error) return $("#bnErr").textContent = "Gagal membuat batch: " + error.message + (/function|p_minutes|schema cache/i.test(error.message) ? " — jalankan ulang supabase/batch.sql di SQL Editor." : "");
-  $("#bnName").value = ""; $("#bnNote").value = ""; $("#bnMin").value = min;
-  $("#bnOk").innerHTML = `<div class="newcode"><div><div class="small mut">Batch dibuat untuk <b>${esc(data.copart)}</b> (durasi ${data.duration_minutes} menit). Bagikan kode ini ke peserta:</div><div class="code" style="margin-top:8px">${esc(data.code)}</div></div>
-    <div class="sp"></div><button class="btn ghost sm" id="ncCode">Salin kode</button><button class="btn ghost sm" id="ncLink">Salin tautan</button></div>`;
-  $("#ncCode").onclick = e => copy(data.code, e.target); $("#ncLink").onclick = e => copy(pubUrl(data.code), e.target);
+  if (error) return err("Gagal menyimpan: " + error.message + (/function|p_settings|p_minutes|schema cache|column/i.test(error.message) ? " — jalankan ulang supabase/batch.sql dan supabase/settings.sql di SQL Editor." : ""));
+  closeBatch();
+  if (!editId) {
+    $("#bnOk").innerHTML = `<div class="newcode"><div><div class="small mut">Batch dibuat untuk <b>${esc(data.copart)}</b> (durasi ${data.duration_minutes} menit). Bagikan kode ini ke peserta:</div><div class="code" style="margin-top:8px">${esc(data.code)}</div></div>
+      <div class="sp"></div><button class="btn ghost sm" id="ncCode">${ic("copy")}Salin kode</button><button class="btn ghost sm" id="ncLink">${ic("link")}Salin tautan</button><button class="m-x" id="ncX" title="Tutup">${ic("x")}</button></div>`;
+    $("#ncCode").onclick = e => copy(data.code, e.currentTarget); $("#ncLink").onclick = e => copy(pubUrl(data.code), e.currentTarget); $("#ncX").onclick = () => $("#bnOk").innerHTML = "";
+  }
   load();
-};
+});
 
 // ---- detail peserta ----
-function openDet(id) {
+function openDet(id, keep) {
   const a = rows.find(r => r.id === id); if (!a) return;
-  cur = { a, wrongOnly: false };
-  $("#vList").hidden = true; $("#vDet").hidden = false; window.scrollTo(0, 0);
-  const lock = a.status === "in_progress", legacy = scored(a) && !isCur(a);
-  $("#vDet").innerHTML = `<div style="padding:24px 0 8px"><button class="btn ghost sm" id="bBack">← Kembali</button></div>
-    <div style="display:flex;justify-content:space-between;gap:16px;flex-wrap:wrap;align-items:flex-start">
-      <div><h1>${esc(a.name)}</h1><p class="mut">${esc(a.job_title)}${a.copart ? " · " + esc(a.copart) : ""} · Mulai ${fmtD(a.started_at)} · Submit ${fmtD(a.submitted_at)}${mins(a) !== null ? " · " + mins(a) + " menit" : ""}</p></div>
+  const y = window.scrollY, filter = cur && cur.a.id === id ? cur.filter : "all";
+  cur = { a, filter };
+  $("#vList").hidden = true; $("#vDet").hidden = false; if (!keep) window.scrollTo(0, 0);
+  const lock = a.status === "in_progress", legacy = scored(a) && !isCur(a), c = scored(a) ? calc(a) : null, ev = evOf(a), fl = flOf(a), s = a.settings || {}, b = bOf(a.batch_id);
+  const dur = a.duration_minutes || E.minutes, end = new Date(new Date(a.started_at).getTime() + dur * 60000);
+  const cards = c
+    ? stat("Nilai", `${c.total}<small> /100</small>`, "award", c.cat, "", true) + stat("Jawaban benar", `${c.right}<small> /${c.N}</small>`, "check", `${a.answered_count || 0} dari ${E.total} terjawab`, "o")
+      + stat("Status kelulusan", c.pass ? "Lulus" : "Belum", "target", `nilai lulus ${c.pm}`, c.pass ? "o" : "w") + stat("Durasi", mins(a) !== null ? mins(a) + "<small> mnt</small>" : "—", "clock", `dari ${dur} menit`)
+    : lock ? stat("Terjawab", `${a.answered_count || 0}<small> /${E.total}</small>`, "check", Math.round((a.answered_count || 0) / E.total * 100) + "% selesai", "", true) + stat("Sisa waktu", `${leftMin(a)}<small> mnt</small>`, "clock", "berakhir " + end.toLocaleTimeString("id-ID", { hour: "2-digit", minute: "2-digit" }), "w")
+      + stat("Ragu-ragu", fl.length, "flag", "soal ditandai") + stat("Keluar tab", ev.blur || 0, "monitor", ev.blur ? "total " + away(ev.away) : s.track_focus ? "dipantau" : "tidak dipantau", ev.blur ? "w" : "")
+    : "";
+  const setChips = Object.entries(OPT_CHIP).filter(([k]) => s[k]).map(([, [i, t]]) => `<span class="chip">${ic(i)}${t}</span>`).join("") || `<span class="mut small">Standar (tanpa pengacakan)</span>`;
+  $("#vDet").innerHTML = `<div style="padding:24px 0 8px"><button class="btn ghost sm" id="bBack">${ic("back")}Kembali</button></div>
+    <div class="dhead"><div class="pname"><div class="avatar">${esc(initials(a.name))}</div><div><h1>${esc(a.name)}</h1><p class="mut" style="margin:4px 0 0">${esc(a.job_title)}${a.copart ? " · " + esc(a.copart) : ""}${a.batch_id ? " · batch " + esc(bcode(a.batch_id)) : ""}</p></div></div>
       <span class="badge ${lock ? "b-in_progress" : "b-graded"}">${ST[a.status]}</span></div>
-    ${lock ? `<div class="alert">Peserta masih mengerjakan (${a.answered_count || 0}/${E.total} terjawab). Nilai muncul otomatis setelah jawaban dikirim; halaman ini bisa dilihat sebagai pantauan.</div>` : ""}
-    ${legacy ? `<div class="alert"><b>Soal versi lama.</b> Peserta ini mengerjakan bank soal sebelumnya (format campuran), sehingga tidak dapat dinilai dengan kunci yang baru. Datanya tetap tersimpan; hapus bila hanya data uji.</div>` : ""}
+    ${legacy ? `<div class="alert">${ic("alert")}<div><b>Soal versi lama.</b> Peserta ini mengerjakan bank soal sebelumnya (format campuran), sehingga tidak dapat dinilai dengan kunci yang baru. Datanya tetap tersimpan; hapus bila hanya data uji.</div></div>` : ""}
+    <div class="dgrid">${cards}</div>
+    <div class="two">
+      <div class="panel"><h3>${ic("list")}Info pengerjaan</h3><dl class="kv">
+        <dt>Mulai</dt><dd>${fmtD(a.started_at)}</dd><dt>Batas waktu</dt><dd>${fmtD(end)} <span class="mut small">(${dur} menit)</span></dd><dt>Dikirim</dt><dd>${fmtD(a.submitted_at)}</dd>
+        <dt>Aktivitas terakhir</dt><dd>${fmtD(a.last_saved_at)}</dd>
+        <dt>Keluar tab</dt><dd>${ev.blur ? `<span class="chip warn">${ic("monitor")}${ev.blur} kali · total ${away(ev.away)}</span> <span class="mut small">terakhir ${fmtD(ev.last)}</span>` : s.track_focus ? "Tidak pernah" : `<span class="mut">Tidak dipantau</span>`}</dd>
+        <dt>Ragu-ragu</dt><dd>${fl.length ? fl.sort((x, y) => x - y).join(", ") + (s.shuffle_q ? ` <span class="mut small">(nomor bank soal)</span>` : "") : "—"}</dd>
+        <dt>Aturan</dt><dd><div class="chips">${setChips}</div></dd></dl></div>
+      ${lock ? `<div class="panel"><h3>${ic("sliders")}Kontrol trainer</h3>
+        <label class="f" style="margin-top:0">Tambah waktu</label><div class="ctrl"><select id="addMin"><option value="5">+5 menit</option><option value="10" selected>+10 menit</option><option value="15">+15 menit</option><option value="30">+30 menit</option></select><button class="btn ghost" id="bAdd">${ic("plus")}Tambah</button></div>
+        <p class="hint">Timer peserta diperbarui otomatis dalam ±30 detik.</p>
+        <label class="f">Akhiri pengerjaan</label><button class="btn danger" id="bForce">${ic("send")}Kirim paksa sekarang</button>
+        <p class="hint">Jawaban yang sudah tersinkron dikirim dan dinilai. Peserta tidak dapat mengubahnya lagi.</p><div class="small" id="ctlMsg"></div></div>`
+      : `<div class="panel"><h3>${ic("edit")}Catatan trainer</h3><textarea id="note" placeholder="Catatan untuk peserta ini…">${esc(a.trainer_notes || "")}</textarea>
+        <div style="display:flex;gap:10px;justify-content:flex-end;align-items:center;margin-top:12px"><span class="mut small" id="svMsg"></span><button class="btn" id="bSave">Simpan Catatan</button></div></div>`}
+    </div>
     <div id="sum"></div>
-    ${legacy ? "" : `<div class="bar" style="margin-top:20px"><label class="small" style="display:flex;gap:8px;align-items:center;cursor:pointer"><input type="checkbox" id="onlyWrong"> Tampilkan hanya jawaban salah / kosong</label></div><div id="pn"></div>`}
-    <div class="card" style="margin:24px 0 8px"><label class="f" style="margin-top:0">Catatan trainer</label><textarea id="note" ${lock ? "disabled" : ""}>${esc(a.trainer_notes || "")}</textarea>
-      <div style="display:flex;gap:10px;justify-content:space-between;margin-top:14px;flex-wrap:wrap"><button class="btn danger sm" id="bDel">Hapus peserta</button>
-      <div style="display:flex;gap:10px;align-items:center"><span class="mut small" id="svMsg"></span><button class="btn" id="bSave" ${lock ? "disabled" : ""}>Simpan Catatan</button></div></div></div><div style="height:60px"></div>`;
+    ${legacy ? "" : `<div class="bar" style="margin-top:24px"><h2 style="margin-right:auto">Jawaban</h2><div class="seg" id="pf"><button data-v="all">Semua</button><button data-v="wrong">Salah / kosong</button><button data-v="flag">Ragu-ragu</button></div></div>
+      ${s.shuffle_opt ? `<div class="alert info">${ic("info")}<span>Pilihan jawaban diacak untuk peserta ini. Huruf di tabel mengikuti urutan bank soal (sama dengan kunci).</span></div>` : ""}<div id="pn"></div>`}
+    <div style="display:flex;justify-content:flex-end;margin:24px 0 60px"><button class="btn danger sm" id="bDel">${ic("trash")}Hapus peserta</button></div>`;
   $("#bBack").onclick = () => { cur = null; $("#vDet").hidden = true; $("#vList").hidden = false; renderList(); };
-  $("#bSave").onclick = saveNote; $("#bDel").onclick = delAttempt;
-  if (!legacy) { $("#onlyWrong").onchange = e => { cur.wrongOnly = e.target.checked; panel(); }; panel(); }
+  $("#bDel").onclick = delAttempt;
+  if (lock) { $("#bAdd").onclick = addTime; $("#bForce").onclick = forceSubmit; } else $("#bSave").onclick = saveNote;
+  if (!legacy) {
+    $$("#pf button").forEach(x => x.classList.toggle("on", x.dataset.v === cur.filter));
+    $("#pf").onclick = e => { const x = e.target.closest("button"); if (!x) return; cur.filter = x.dataset.v; $$("#pf button").forEach(z => z.classList.toggle("on", z === x)); panel(); };
+    panel();
+  }
   summary();
+  if (keep) window.scrollTo(0, y);
 }
 
 function summary() {
   const a = cur.a, c = calc(a), ok = scored(a) && c;
   if (!ok) { $("#sum").innerHTML = ""; return; }
   const comp = Object.entries(c.comp), weak = comp.filter(([k, v]) => REM[k] && v.got / v.max < 0.6).map(([k]) => REM[k]);
-  $("#sum").innerHTML = `<div class="sum"><div class="stat hl"><span>Nilai</span><b>${c.total}<span class="mut small"> /100</span></b></div>
-      <div class="stat"><span>Jawaban benar</span><b>${c.right}<span class="mut small"> /${c.N}</span></b></div>
-      <div class="stat"><span>Terjawab</span><b>${a.answered_count || 0}<span class="mut small"> /${E.total}</span></b></div></div>
-    <p><span class="badge b-submitted">${c.cat}</span></p>
-    <div class="tw" style="margin-top:12px"><table><thead><tr><th>Area</th><th>Benar</th><th>Persentase</th></tr></thead><tbody>${comp.map(([k, v]) => {
+  $("#sum").innerHTML = `<h2 style="margin:24px 0 12px">Rincian per area</h2>
+    <div class="tw"><table><thead><tr><th>Area</th><th>Benar</th><th>Persentase</th></tr></thead><tbody>${comp.map(([k, v]) => {
       const pc = Math.round(v.got / v.max * 100);
-      return `<tr><td>${esc((E.codes || {})[k] || k)} <span class="mut small">${esc(k)}</span></td><td>${v.got}/${v.max}</td><td><div class="pb"><div class="pbar"><i style="width:${pc}%"></i></div><span class="small">${pc}%</span></div></td></tr>`;
+      return `<tr><td>${esc((E.codes || {})[k] || k)} <span class="mut small">${esc(k)}</span></td><td>${v.got}/${v.max}</td><td><div class="pb"><div class="pbar ${pc < 60 ? "bad" : pc < 80 ? "" : "ok"}"><i style="width:${pc}%"></i></div><span class="small">${pc}%</span></div></td></tr>`;
     }).join("")}</tbody></table></div>
-    ${weak.length ? `<div class="alert"><b>Rekomendasi remedial</b> (area &lt; 60%): ${weak.map(esc).join("; ")}</div>` : ""}`;
+    ${weak.length ? `<div class="alert">${ic("alert")}<div><b>Rekomendasi remedial</b> (area &lt; 60%): ${weak.map(esc).join("; ")}</div></div>` : ""}`;
 }
 
 function panel() {
-  const a = cur.a, mc = (a.answers || {}).mc || {}, fin = scored(a), L = "ABCD";
+  const a = cur.a, mc = (a.answers || {}).mc || {}, fin = scored(a), fl = flOf(a);
   const body = E.mc.map(([n, q, o]) => {
-    const v = mc[n] || "", k = cfg.mc[n], ok = v === k;
-    if (cur.wrongOnly && (!fin || ok)) return "";
-    const tx = x => x ? `${x}. ${esc(o[L.indexOf(x)])}` : "—";
-    return `<tr><td>${n}</td><td>${esc(q)}<div class="mut small">${esc((cfg.comp || {})[n] || "")}${cfg.exp && cfg.exp[n] ? " · Pembahasan: " + esc(cfg.exp[n]) : ""}</div></td><td>${tx(v)}</td><td>${tx(k)}</td><td class="${fin ? (ok ? "ok" : "no") : ""}">${fin ? (ok ? "✓ +1" : "✗ 0") : "—"}</td></tr>`;
+    const v = mc[n] || "", k = cfg.mc[n], ok = v === k, f = fl.includes(n);
+    if (cur.filter === "wrong" && (!fin || ok)) return "";
+    if (cur.filter === "flag" && !f) return "";
+    const tx = x => x ? `${x}. ${esc(o[L.indexOf(x)])}` : `<span class="mut">—</span>`;
+    return `<tr><td class="nw">${n}${f ? ` <span title="Ditandai ragu-ragu" style="color:var(--flag)">${ic("flag")}</span>` : ""}</td><td>${esc(q)}<div class="mut small">${esc((cfg.comp || {})[n] || "")}${cfg.exp && cfg.exp[n] ? " · Pembahasan: " + esc(cfg.exp[n]) : ""}</div></td><td>${tx(v)}</td><td>${tx(k)}</td><td class="nw ${fin ? (ok ? "ok" : "no") : ""}">${fin ? (ok ? "✓ +1" : "✗ 0") : "—"}</td></tr>`;
   }).join("");
-  $("#pn").innerHTML = `<div class="tw"><table><thead><tr><th>No</th><th>Pertanyaan</th><th>Jawaban peserta</th><th>Kunci</th><th>Hasil</th></tr></thead><tbody>${body || `<tr><td colspan="5" class="mut" style="text-align:center;padding:24px">Tidak ada jawaban salah.</td></tr>`}</tbody></table></div>`;
+  const none = cur.filter === "flag" ? "Tidak ada soal yang ditandai ragu-ragu." : "Tidak ada jawaban salah.";
+  $("#pn").innerHTML = `<div class="tw"><table class="qx"><thead><tr><th>No</th><th>Pertanyaan</th><th>Jawaban peserta</th><th>Kunci</th><th>Hasil</th></tr></thead><tbody>${body || `<tr><td colspan="5"><div class="empty">${none}</div></td></tr>`}</tbody></table></div>`;
 }
 
+async function updAttempt(p) {
+  const { data, error } = await sb.from("attempts").update(p).eq("id", cur.a.id).select().single();
+  if (error) throw error;
+  const i = rows.findIndex(r => r.id === data.id); if (i >= 0) rows[i] = data;
+  return data;
+}
+async function addTime() {
+  const add = Number($("#addMin").value), base = cur.a.duration_minutes || E.minutes;
+  $("#bAdd").disabled = true;
+  try { await updAttempt({ duration_minutes: base + add }); openDet(cur.a.id, true); $("#ctlMsg").innerHTML = `<span class="ok">Waktu ditambah ${add} menit (total ${base + add} menit).</span>`; }
+  catch (e) { $("#bAdd").disabled = false; $("#ctlMsg").innerHTML = `<span class="no">Gagal: ${esc(e.message)}</span>`; }
+}
+async function forceSubmit() {
+  if (!confirm(`Kirim paksa jawaban ${cur.a.name} sekarang?\nJawaban yang sudah tersinkron akan dinilai dan peserta tidak dapat melanjutkan.`)) return;
+  $("#bForce").disabled = true;
+  try { await updAttempt({ status: "submitted", submitted_at: new Date().toISOString() }); openDet(cur.a.id, true); }
+  catch (e) { $("#bForce").disabled = false; $("#ctlMsg").innerHTML = `<span class="no">Gagal: ${esc(e.message)}</span>`; }
+}
 async function saveNote() {
-  const a = cur.a; $("#bSave").disabled = true; $("#svMsg").textContent = "Menyimpan…";
-  const { data, error } = await sb.from("attempts").update({ trainer_notes: $("#note").value }).eq("id", a.id).select().single();
+  $("#bSave").disabled = true; $("#svMsg").textContent = "Menyimpan…";
+  try { const d = await updAttempt({ trainer_notes: $("#note").value }); cur.a = d; $("#svMsg").textContent = "Catatan tersimpan"; }
+  catch (e) { $("#svMsg").textContent = "Gagal: " + e.message; }
   $("#bSave").disabled = false;
-  if (error) return $("#svMsg").textContent = "Gagal: " + error.message;
-  Object.assign(a, data); const i = rows.findIndex(r => r.id === a.id); if (i >= 0) rows[i] = data;
-  $("#svMsg").textContent = "Catatan tersimpan";
 }
 async function delAttempt() {
   if (!confirm("Hapus peserta ini beserta seluruh jawabannya? Tindakan ini tidak dapat dibatalkan.")) return;
@@ -203,9 +350,47 @@ async function delAttempt() {
   rows = rows.filter(r => r.id !== cur.a.id); $("#bBack").click();
 }
 
+// ---- analisis soal ----
+const lvl = p => p >= 80 ? ["Mudah", "e"] : p >= 50 ? ["Sedang", "m"] : ["Sulit", "h"];
+function itemStats(list) {
+  return E.mc.map(([n, q, o]) => {
+    const d = { A: 0, B: 0, C: 0, D: 0, _: 0 };
+    list.forEach(a => { const v = String(((a.answers || {}).mc || {})[n] || "").toUpperCase(); if (v && d[v] !== undefined) d[v]++; else d._++; });
+    const k = cfg.mc[n], p = list.length ? Math.round(d[k] / list.length * 100) : 0;
+    return { n, q, o, d, k, p, comp: (cfg.comp || {})[n] || "—", flags: list.filter(a => flOf(a).includes(n)).length };
+  });
+}
+function renderAnal() {
+  const fin = batchRows().filter(r => scored(r) && isCur(r));
+  if (!fin.length) { $("#anal").innerHTML = `<div class="card empty">${ic("chart")}<h3 style="margin:4px 0 6px;color:var(--ink)">Belum ada data</h3><p style="margin:0">Analisis muncul setelah ada peserta yang mengirim jawaban pada batch ini.</p></div>`; return; }
+  const it = itemStats(fin), byArea = {};
+  it.forEach(x => { (byArea[x.comp] = byArea[x.comp] || []).push(x.p); });
+  const hard = it.filter(x => x.p < 50).length, easy = it.filter(x => x.p >= 80).length;
+  let list = an.area === "all" ? it : it.filter(x => x.comp === an.area);
+  if (an.sort === "hard") list = [...list].sort((a, b) => a.p - b.p || a.n - b.n);
+  if (an.sort === "easy") list = [...list].sort((a, b) => b.p - a.p || a.n - b.n);
+  const areas = Object.entries(byArea).map(([k, ps]) => { const v = Math.round(ps.reduce((t, x) => t + x, 0) / ps.length); return `<div class="area"><div class="t"><span>${esc((E.codes || {})[k] || k)}</span><b>${v}%</b></div><div class="pbar ${v < 60 ? "bad" : v < 80 ? "" : "ok"}"><i style="width:${v}%"></i></div><div class="xs mut" style="margin-top:6px">${ps.length} soal · rata-rata benar</div></div>`; }).join("");
+  $("#anal").innerHTML = `<div class="stats s4">${stat("Peserta dinilai", fin.length, "users")}${stat("Rata-rata benar", Math.round(it.reduce((t, x) => t + x.p, 0) / it.length) + "%", "chart")}${stat("Soal sulit", hard, "alert", "&lt; 50% peserta benar", "w")}${stat("Soal mudah", easy, "check", "≥ 80% peserta benar", "o")}</div>
+    <h2 style="margin:8px 0 12px">Per area</h2><div class="areas">${areas}</div>
+    <div class="bar"><h2 style="margin-right:auto">Per soal</h2>
+      <select id="anArea" aria-label="Filter area"><option value="all">Semua area</option>${Object.keys(byArea).map(k => `<option value="${esc(k)}" ${an.area === k ? "selected" : ""}>${esc((E.codes || {})[k] || k)}</option>`).join("")}</select>
+      <div class="seg" id="anSort"><button data-v="no">Nomor</button><button data-v="hard">Tersulit</button><button data-v="easy">Termudah</button></div></div>
+    <div class="tw"><table class="qx"><thead><tr><th>No</th><th>Pertanyaan</th><th>Benar</th><th>Tingkat</th><th>Sebaran jawaban</th></tr></thead><tbody>${list.map(x => {
+      const [lt, lc] = lvl(x.p);
+      return `<tr><td>${x.n}</td><td>${esc(x.q)}<div class="mut small">${esc(x.comp)} · kunci ${x.k}${x.flags ? ` · ${x.flags} peserta ragu-ragu` : ""}</div></td>
+        <td class="nw"><div class="pb" style="min-width:120px"><div class="pbar ${x.p < 50 ? "bad" : x.p < 80 ? "" : "ok"}"><i style="width:${x.p}%"></i></div><span class="small">${x.p}%</span></div></td>
+        <td><span class="lvl ${lc}">${lt}</span></td>
+        <td><div class="dist">${L.split("").map(l => `<span class="${l === x.k ? "k" : x.d[l] > x.d[x.k] ? "hot" : ""}" title="${esc(x.o[L.indexOf(l)])}">${l} ${x.d[l]}</span>`).join("")}<span title="Tidak dijawab">— ${x.d._}</span></div></td></tr>`;
+    }).join("")}</tbody></table></div>
+    <p class="hint">Hijau = kunci jawaban. Merah = pengecoh yang dipilih lebih banyak peserta daripada kunci (indikasi miskonsepsi atau soal ambigu).</p>`;
+  $$("#anSort button").forEach(b => b.classList.toggle("on", b.dataset.v === an.sort));
+  $("#anSort").onclick = e => { const b = e.target.closest("button"); if (b) { an.sort = b.dataset.v; renderAnal(); } };
+  $("#anArea").onchange = e => { an.area = e.target.value; renderAnal(); };
+}
+
 // ---- ekspor Excel ----
 $("#bXls").onclick = async () => {
-  $("#bXls").disabled = true; $("#bXls").textContent = "Menyiapkan…";
+  $("#bXls").disabled = true; $("#bXlsT").textContent = "Menyiapkan…";
   try { await load(); await exportXlsx(); } catch (e) { alert("Gagal ekspor: " + e.message); }
   $("#bXls").disabled = false; setXlsLabel();
 };
@@ -222,23 +407,28 @@ async function exportXlsx() {
   const codeMax = {}; Object.values(cfg.comp || {}).forEach(c => codeMax[c] = (codeMax[c] || 0) + 1);
   const codes = Object.keys(codeMax);
   const w1 = wb.addWorksheet("Rekap Nilai");
-  w1.columns = [["No", 5], ["Nama", 26], ["Jabatan", 24], ["Copart", 24], ["Kode Batch", 11], ["Status", 16], ["Mulai", 18], ["Submit", 18], ["Durasi (mnt)", 12], ["Terjawab", 10], ["Benar", 9], ["Nilai (/100)", 12], ["Kategori", 24],
-    ...codes.map(c => [`${c} (/${codeMax[c]})`, 12]), ["Catatan trainer", 40]].map(([header, width], i) => ({ header, width, key: "c" + i }));
+  w1.columns = [["No", 5], ["Nama", 26], ["Jabatan", 24], ["Copart", 24], ["Kode Batch", 11], ["Status", 16], ["Mulai", 18], ["Submit", 18], ["Durasi (mnt)", 12], ["Terjawab", 10], ["Benar", 9], ["Nilai (/100)", 12], ["Kategori", 24], ["Nilai lulus", 10], ["Lulus", 12],
+    ...codes.map(c => [`${c} (/${codeMax[c]})`, 12]), ["Ragu-ragu", 10], ["Keluar tab (kali)", 12], ["Waktu di luar (mnt)", 13], ["Catatan trainer", 40]].map(([header, width], i) => ({ header, width, key: "c" + i }));
   const w2 = wb.addWorksheet("Detail Jawaban");
-  w2.columns = [["Nama", 24], ["Jabatan", 20], ["Copart", 22], ["No", 6], ["Area", 10], ["Pertanyaan", 60], ["Jawaban peserta", 50], ["Kunci", 8], ["Poin", 8]].map(([header, width], i) => ({ header, width, key: "c" + i }));
+  w2.columns = [["Nama", 24], ["Jabatan", 20], ["Copart", 22], ["No", 6], ["Area", 10], ["Pertanyaan", 60], ["Jawaban peserta", 50], ["Kunci", 8], ["Poin", 8], ["Ragu-ragu", 10]].map(([header, width], i) => ({ header, width, key: "c" + i }));
   const list = [...batchRows()].reverse();
   list.forEach((a, i) => {
-    const ok = scored(a), legacy = ok && !isCur(a), c = ok ? calc(a) : null, mc = (a.answers || {}).mc || {};
+    const ok = scored(a), legacy = ok && !isCur(a), c = ok ? calc(a) : null, mc = (a.answers || {}).mc || {}, ev = evOf(a), fl = flOf(a);
     w1.addRow([i + 1, a.name, a.job_title, a.copart || "", bcode(a.batch_id), legacy ? "Selesai (soal versi lama)" : ST[a.status], new Date(a.started_at), a.submitted_at ? new Date(a.submitted_at) : "", mins(a) ?? "", a.answered_count || 0,
-      ...(c ? [c.right, c.total, c.cat, ...codes.map(k => (c.comp[k] || { got: 0 }).got)] : ["", "", "", ...codes.map(() => "")]), a.trainer_notes || ""]);
+      ...(c ? [c.right, c.total, c.cat, c.pm, c.pass ? "Lulus" : "Belum lulus", ...codes.map(k => (c.comp[k] || { got: 0 }).got)] : ["", "", "", passMark(a), "", ...codes.map(() => "")]),
+      fl.length, ev.blur || 0, ev.away ? Math.round(ev.away / 6) / 10 : 0, a.trainer_notes || ""]);
     if (!c) return;
     E.mc.forEach(([n, q, o]) => { const v = mc[n] || "", k = cfg.mc[n];
-      w2.addRow([a.name, a.job_title, a.copart || "", n, (cfg.comp || {})[n] || "", q, v ? `${v}. ${o["ABCD".indexOf(v)] || ""}` : "", k, v === k ? 1 : 0]); });
+      w2.addRow([a.name, a.job_title, a.copart || "", n, (cfg.comp || {})[n] || "", q, v ? `${v}. ${o[L.indexOf(v)] || ""}` : "", k, v === k ? 1 : 0, fl.includes(n) ? "Ya" : ""]); });
   });
-  [w1, w2].forEach(w => { head(w); body(w); });
+  const fin = list.filter(a => scored(a) && isCur(a));
+  const w3 = wb.addWorksheet("Analisis Soal");
+  w3.columns = [["No", 6], ["Area", 10], ["Pertanyaan", 60], ["Kunci", 8], ["% Benar", 10], ["Tingkat", 10], ["A", 7], ["B", 7], ["C", 7], ["D", 7], ["Kosong", 8], ["Ragu-ragu", 10]].map(([header, width], i) => ({ header, width, key: "c" + i }));
+  if (fin.length) itemStats(fin).forEach(x => w3.addRow([x.n, x.comp, x.q, x.k, x.p, lvl(x.p)[0], x.d.A, x.d.B, x.d.C, x.d.D, x.d._, x.flags]));
+  [w1, w2, w3].forEach(w => { head(w); body(w); });
   ["G", "H"].forEach(col => w1.getColumn(col).numFmt = "dd/mm/yyyy hh:mm");
   const buf = await wb.xlsx.writeBuffer(), url = URL.createObjectURL(new Blob([buf], { type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" }));
-  const el = document.createElement("a"); el.href = url; const bn = (batches.find(b => b.id === bf) || {}).copart, slug = bn ? "_" + bn.replace(/[^A-Za-z0-9]+/g, "_").replace(/^_|_$/g, "") : "";
+  const el = document.createElement("a"); el.href = url; const bn = (bOf(bf) || {}).copart, slug = bn ? "_" + bn.replace(/[^A-Za-z0-9]+/g, "_").replace(/^_|_$/g, "") : "";
   el.download = "Hasil_Final_Assessment_ISO9001" + slug + "_" + new Date().toISOString().slice(0, 10) + ".xlsx"; el.click(); URL.revokeObjectURL(url);
 }
 init();

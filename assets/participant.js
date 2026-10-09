@@ -1,5 +1,6 @@
 (() => {
-const E = window.EXAM, CFG = window.APP_CONFIG, L = "ABCD", CK = "exam-cache", ic = window.ic;
+let BK = window.bankOf();
+const CFG = window.APP_CONFIG, L = "ABCD", CK = "exam-cache", ic = window.ic;
 const $ = s => document.querySelector(s), $$ = s => document.querySelectorAll(s);
 const esc = s => String(s).replace(/[&<>"]/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));
 let sb, attempt, ans, S = {}, saveT, tick, loop, chk, dirty = false, pending = false, saving = false, done = false;
@@ -22,7 +23,6 @@ const writeCache = () => { try {
 } catch {} };
 
 async function init() {
-  $("#pTotal").textContent = E.total;
   if (!CFG.SUPABASE_URL || CFG.SUPABASE_URL.startsWith("GANTI")) return fatal("Isi SUPABASE_URL dan SUPABASE_ANON_KEY pada assets/config.js.");
   if ("serviceWorker" in navigator) navigator.serviceWorker.register("sw.js").catch(() => {});
   sb = supabase.createClient(CFG.SUPABASE_URL, CFG.SUPABASE_ANON_KEY, { auth: { storageKey: "exam-participant" } });
@@ -61,8 +61,9 @@ async function lookup(raw) {
   if (!d.is_open) return err("Batch ini sudah ditutup.");
   if (d.open_from && now < new Date(d.open_from).getTime()) return err(`Batch dibuka pada ${fmtDT(d.open_from)}.`);
   if (d.open_until && now > new Date(d.open_until).getTime()) return err("Batch ini sudah ditutup.");
-  batch = { code, copart: d.copart, minutes: d.duration_minutes || E.minutes };
-  $("#bCopart").textContent = batch.copart; $("#bInfo").textContent = `${E.total} soal · ${batch.minutes} menit`;
+  const bk = window.bankOf(d.settings);
+  batch = { code, copart: d.copart, minutes: d.duration_minutes || bk.minutes };
+  $("#bCopart").textContent = batch.copart; $("#bInfo").textContent = `${bk.total} soal · ${batch.minutes} menit`;
   $("#fCode").hidden = true; $("#fStart").hidden = false; $("#name").focus();
 }
 
@@ -118,10 +119,14 @@ document.addEventListener("visibilitychange", () => {
   back(); if (dirty || pending) flush();
 });
 window.addEventListener("beforeunload", e => { if (active()) { e.preventDefault(); e.returnValue = ""; } });
-["copy", "cut", "paste", "contextmenu", "selectstart", "dragstart"].forEach(t => document.addEventListener(t, e => { if (!$("#vExam").hidden) e.preventDefault(); }));
+const inText = e => !!e.target && e.target.tagName === "TEXTAREA";
+["copy", "cut", "selectstart", "dragstart"].forEach(t => document.addEventListener(t, e => { if (!$("#vExam").hidden && !inText(e)) e.preventDefault(); }));
+["paste", "drop", "contextmenu"].forEach(t => document.addEventListener(t, e => { if (!$("#vExam").hidden) e.preventDefault(); }));
+const EDIT_KEY = /^(a|c|x|z|y|arrowleft|arrowright|arrowup|arrowdown|backspace|delete|home|end)$/i;   // pintasan menyunting di kolom jawaban
 document.addEventListener("keydown", e => {
   if ($("#vExam").hidden || done) return;
   if (e.key === "Escape") { closeSide(); closeModal(); return; }
+  if (inText(e) && (e.ctrlKey || e.metaKey) && !e.altKey && EDIT_KEY.test(e.key)) return;
   if (e.ctrlKey || e.metaKey || e.altKey || /^F\d{1,2}$/.test(e.key) || e.key === "PrintScreen" || e.key === "ContextMenu") { e.preventDefault(); e.stopPropagation(); }
 }, true);
 document.addEventListener("keyup", e => { if (e.key === "PrintScreen" && !$("#vExam").hidden) { try { navigator.clipboard.writeText(""); } catch {} } });
@@ -142,25 +147,27 @@ function optOrder(n, o) {
   let f = 0; return idx.map(k => PIN.test(o[k].trim()) ? k : mixed[f++]);
 }
 function build() {
-  QM = {}; E.mc.forEach(([n, q, o]) => QM[n] = { q, o });
-  order = E.areas.map((ar, i) => {
-    const ns = E.mc.filter(([n]) => n >= ar.from && n <= ar.to).map(([n]) => n);
-    const sh = S.shuffle_q ? shuffle(ns, seeded(attempt.id + ":q" + i)) : ns;
+  QM = BK.item; disp = {}; secOf = {};
+  order = BK.sections.map((sec, i) => {
+    const ns = sec.items.map(it => it.n);
+    const sh = S.shuffle_q && sec.items.every(it => it.kind === "mc") ? shuffle(ns, seeded(attempt.id + ":q" + i)) : ns;   // hanya bagian pilihan ganda yang diacak
     sh.forEach((n, j) => { disp[n] = ns[j]; secOf[n] = i; });            // nomor tampil tetap berurutan di tiap bagian
     return sh;
   });
-  E.mc.forEach(([n, , o]) => opt[n] = optOrder(n, o));
+  BK.items.forEach(it => { if (it.kind === "mc") opt[it.n] = optOrder(it.n, it.o); });
 }
 
 function startExam(saved, pg) {
   // Jawaban dari versi soal lama (format berbeda) tidak dipakai agar tidak tercampur dengan kunci yang baru
-  const same = !!saved && saved.v === E.version;
-  ans = { v: E.version, mc: same ? Object.assign({}, saved.mc) : {}, fl: same && Array.isArray(saved.fl) ? saved.fl.map(Number) : [], ev: same && saved.ev ? Object.assign({}, saved.ev) : {} };
+  S = attempt.settings || {}; BK = window.bankOf(S);
+  const legacy = !!saved && !saved.v && BK.manual && !!(saved.tf || saved.txt);   // jawaban format lama tanpa versi = bank 50 soal
+  const same = !!saved && (saved.v === BK.version || legacy), pick = k => same && saved[k] ? Object.assign({}, saved[k]) : {};
+  ans = { v: BK.version, mc: pick("mc"), tf: pick("tf"), tfr: pick("tfr"), txt: pick("txt"), fl: same && Array.isArray(saved.fl) ? saved.fl.map(Number) : [], ev: same && saved.ev ? Object.assign({}, saved.ev) : {} };
   if (saved && !same && Object.keys(saved).length) dirty = true;
-  S = attempt.settings || {};
+  $("#pTotal").textContent = BK.total;
   $("#whoN").textContent = attempt.name; $("#whoM").textContent = attempt.job_title + (attempt.copart ? " · " + attempt.copart : "");
   build(); shell();
-  page = Math.min(Math.max(0, pg | 0), E.areas.length - 1);
+  page = Math.min(Math.max(0, pg | 0), BK.sections.length - 1);
   renderPage(); progress(); view("vExam"); net(); focusGrid();
   document.body.classList.add("exam-on"); markNoFs(); lockUI();
   const t = () => {
@@ -173,13 +180,13 @@ function startExam(saved, pg) {
   loop = setInterval(() => { if ((dirty || pending) && !saving) flush(); }, 5000);
   chk = setInterval(checkServer, 30000);
 }
-const endAt = () => new Date(attempt.started_at).getTime() + (attempt.duration_minutes || E.minutes) * 60000;   // durasi dari batch; data lama pakai bawaan
+const endAt = () => new Date(attempt.started_at).getTime() + (attempt.duration_minutes || BK.minutes) * 60000;   // durasi dari batch; data lama pakai bawaan
 const fmtT = s => { const p = v => String(v).padStart(2, "0"), h = Math.floor(s / 3600), m = Math.floor(s % 3600 / 60); return (h ? h + ":" + p(m) : p(m)) + ":" + p(s % 60); };
 
 // ---- sinkronisasi dengan server ----
 function applyServer(d) {
   if (d.duration_minutes && d.duration_minutes !== attempt.duration_minutes) {
-    const diff = d.duration_minutes - (attempt.duration_minutes || E.minutes);
+    const diff = d.duration_minutes - (attempt.duration_minutes || BK.minutes);
     attempt.duration_minutes = d.duration_minutes; writeCache();
     toast(diff > 0 ? `Trainer menambah waktu ujian ${diff} menit.` : "Durasi ujian diperbarui oleh trainer.", "ok");
   }
@@ -190,8 +197,8 @@ async function syncFromServer() {
   if (data.status !== "in_progress") return finish();
   applyServer(data);
   let added = false;
-  if ((data.answers || {}).v !== E.version) return;
-  for (const [n, v] of Object.entries(data.answers.mc || {})) if (!(n in ans.mc)) { ans.mc[n] = v; added = true; }
+  if ((data.answers || {}).v !== BK.version) return;
+  for (const k of ["mc", "tf", "tfr", "txt"]) for (const [n, v] of Object.entries(data.answers[k] || {})) if (!(n in ans[k])) { ans[k][n] = v; added = true; }
   if (added) { restore(); progress(); dirty = true; writeCache(); }
 }
 async function checkServer() {                 // memantau perubahan dari trainer: tambah waktu atau kirim paksa
@@ -232,33 +239,44 @@ window.addEventListener("offline", net);
 window.addEventListener("online", () => { net(); if (ans && !done) flush(); });
 
 // ---- tampilan soal: satu bagian per halaman ----
-const answered = n => !!String(ans.mc[n] || "").trim();
+const KEY = { mc: "mc", tf: "tf", essay: "txt" };
+const answered = n => { const it = QM[n]; return !!it && !!String(ans[KEY[it.kind]][n] || "").trim(); };
 const isFl = n => ans.fl.includes(+n);
 function shell() {
-  $("#grid").innerHTML = E.areas.map((ar, i) => `<div class="gsec" data-s="${i}"><div class="gsec-h" data-p="${i}"><span>${i + 1}. ${esc(ar.short || ar.name)}</span><em>0/${order[i].length}</em></div>
+  $("#grid").innerHTML = BK.sections.map((sec, i) => `<div class="gsec" data-s="${i}"><div class="gsec-h" data-p="${i}"><span>${BK.manual ? "" : i + 1 + ". "}${esc(sec.short || sec.name)}</span><em>0/${order[i].length}</em></div>
     <div class="g">${order[i].map(n => `<button type="button" class="gb" data-n="${n}">${disp[n]}</button>`).join("")}</div></div>`).join("");
 }
+function itemHtml(n) {
+  const it = QM[n];
+  let body = "";
+  if (it.kind === "mc") body = `<div class="opts" role="radiogroup">${opt[n].map((k, pos) =>
+    `<label class="opt"><input type="radio" name="mc${n}" data-k="mc" data-n="${n}" value="${L[k]}"><span class="k">${L[pos]}</span><span>${esc(it.o[k])}</span></label>`).join("")}</div>`;
+  else if (it.kind === "tf") body = `<div class="opts tf" role="radiogroup">${[["B", "Benar"], ["S", "Salah"]].map(([v, t]) =>
+    `<label class="opt"><input type="radio" name="tf${n}" data-k="tf" data-n="${n}" value="${v}"><span class="k">${v}</span><span>${t}</span></label>`).join("")}</div>
+    <label class="ta-l" for="r${n}">Alasan</label><textarea id="r${n}" data-k="tfr" data-n="${n}" rows="3" placeholder="Tuliskan alasan Anda"></textarea>`;
+  else body = `<textarea data-k="txt" data-n="${n}" rows="6" aria-label="Jawaban soal ${disp[n]}" placeholder="Tuliskan jawaban Anda"></textarea>`;
+  return `<article class="q" id="q${n}"><div class="q-top"><span class="qno">Soal ${disp[n]}${it.label ? " · " + esc(it.label) : ""}</span><button type="button" class="flag" data-f="${n}" aria-pressed="false">Ragu-ragu</button></div>
+    <div class="qt">${esc(it.q)}</div>${body}${it.kind === "essay" ? "" : `<div class="q-foot" hidden><button type="button" class="clear" data-c="${n}">Hapus pilihan</button></div>`}</article>`;
+}
 function renderPage() {
-  const ar = E.areas[page], ns = order[page], N = E.areas.length, last = page === N - 1;
-  let h = `<section><div class="page-h"><div><div class="ey">Bagian ${page + 1} dari ${N}</div><h2>${esc(ar.name)}</h2><p>Soal ${disp[ns[0]]}–${disp[ns[ns.length - 1]]}</p></div>
-    <div class="page-prog"><b id="ppC">0</b> / ${ns.length} terjawab<div class="pbar"><i id="ppB" style="width:0"></i></div></div></div>`;
-  ns.forEach(n => {
-    const { q, o } = QM[n];
-    h += `<article class="q" id="q${n}"><div class="q-top"><span class="qno">Soal ${disp[n]}</span><button type="button" class="flag" data-f="${n}" aria-pressed="false">Ragu-ragu</button></div>
-      <div class="qt">${esc(q)}</div><div class="opts" role="radiogroup">${opt[n].map((k, pos) =>
-        `<label class="opt"><input type="radio" name="mc${n}" data-n="${n}" value="${L[k]}"><span class="k">${L[pos]}</span><span>${esc(o[k])}</span></label>`).join("")}</div>
-      <div class="q-foot" hidden><button type="button" class="clear" data-c="${n}">Hapus jawaban</button></div></article>`;
-  });
+  const sec = BK.sections[page], ns = order[page], N = BK.sections.length, last = page === N - 1;
+  let h = `<section><div class="page-h"><div><div class="ey">Bagian ${page + 1} dari ${N}</div><h2>${esc(sec.name)}</h2><p>Soal ${disp[ns[0]]}${ns.length > 1 ? "–" + disp[ns[ns.length - 1]] : ""}</p></div>
+    <div class="page-prog"><b id="ppC">0</b> / ${ns.length} terjawab<div class="pbar"><i id="ppB" style="width:0"></i></div></div></div>
+    ${sec.intro ? `<p class="intro">${esc(sec.intro)}</p>` : ""}${sec.scenario ? `<div class="scn"><div class="ey">Kasus</div>${esc(sec.scenario)}</div>` : ""}`;
+  ns.forEach(n => h += itemHtml(n));
   h += `<div class="pager"><button type="button" class="btn ghost" data-go="${page - 1}" ${page === 0 ? "disabled" : ""}>Sebelumnya</button>
     <span class="mid">${page + 1} / ${N}</span>
     ${last ? `<button type="button" class="btn" data-submit>Tinjau &amp; Kirim</button>` : `<button type="button" class="btn" data-go="${page + 1}">Berikutnya</button>`}</div></section>`;
   $("#exam").innerHTML = h; restore();
 }
 function restore() {
-  $$("#exam input[type=radio]").forEach(el => { el.checked = ans.mc[el.dataset.n] === el.value; });
+  $$("#exam [data-k]").forEach(el => {
+    const v = (ans[el.dataset.k] || {})[el.dataset.n];
+    if (el.type === "radio") el.checked = v === el.value; else if (el.value !== (v || "")) el.value = v || "";
+  });
 }
 function goPage(i, n) {
-  if (i < 0 || i >= E.areas.length) return;
+  if (i < 0 || i >= BK.sections.length) return;
   const changed = i !== page; page = i;
   if (changed) { renderPage(); writeCache(); }
   progress(); if (changed) focusGrid();
@@ -272,14 +290,18 @@ function touch() {
   setSt("menyimpan…"); clearTimeout(saveT); saveT = setTimeout(flush, 1200);
 }
 $("#exam").addEventListener("change", e => {
-  const el = e.target; if (!el.dataset.n || done || el.type !== "radio" || !el.checked) return;
-  ans.mc[el.dataset.n] = el.value; touch();
+  const el = e.target; if (!el.dataset.k || done || el.type !== "radio" || !el.checked) return;
+  ans[el.dataset.k][el.dataset.n] = el.value; touch();
+});
+$("#exam").addEventListener("input", e => {
+  const el = e.target; if (el.tagName !== "TEXTAREA" || !el.dataset.k || done) return;
+  ans[el.dataset.k][el.dataset.n] = el.value; touch();
 });
 $("#exam").addEventListener("click", e => {
   if (done) return;
   const f = e.target.closest("[data-f]"), c = e.target.closest("[data-c]"), g = e.target.closest("[data-go]");
   if (f) { const n = +f.dataset.f; ans.fl = isFl(n) ? ans.fl.filter(x => x !== n) : [...ans.fl, n]; touch(); }
-  else if (c) { delete ans.mc[c.dataset.c]; restore(); touch(); }
+  else if (c) { delete ans[KEY[QM[c.dataset.c].kind]][c.dataset.c]; restore(); touch(); }
   else if (g) goPage(+g.dataset.go);
   else if (e.target.closest("[data-submit]")) openConfirm();
 });
@@ -293,19 +315,19 @@ $("#fab").onclick = openSide; $("#scrim").onclick = closeSide; $("#sideX").oncli
 $("#bSubmit").onclick = openConfirm;
 
 function count() {
-  return Object.values(ans.mc || {}).filter(v => String(v).trim()).length;
+  return BK.items.filter(it => answered(it.n)).length;
 }
 function progress() {
   const c = count();
-  $("#pCount").textContent = c; $("#pBar").style.width = (c / E.total * 100) + "%";
-  $("#cA").textContent = c; $("#cF").textContent = ans.fl.length; $("#cU").textContent = E.total - c;
-  $("#fabTxt").textContent = `Navigasi soal · ${c}/${E.total}`;
+  $("#pCount").textContent = c; $("#pBar").style.width = (c / BK.total * 100) + "%";
+  $("#cA").textContent = c; $("#cF").textContent = ans.fl.length; $("#cU").textContent = BK.total - c;
+  $("#fabTxt").textContent = `Navigasi soal · ${c}/${BK.total}`;
   const full = order.map(ns => ns.filter(answered).length);
   $$(".gsec").forEach(s => { const i = +s.dataset.s; s.querySelector("em").textContent = full[i] + "/" + order[i].length; s.classList.toggle("on", i === page); });
   $$(".gb[data-n]").forEach(b => { b.classList.toggle("a", answered(b.dataset.n)); b.classList.toggle("f", isFl(b.dataset.n)); });
   $$("#exam .q").forEach(q => {
     const n = q.id.slice(1), a = answered(n), f = isFl(n), fb = q.querySelector(".flag");
-    q.classList.toggle("fl", f); q.querySelector(".q-foot").hidden = !a;
+    const qf = q.querySelector(".q-foot"); q.classList.toggle("fl", f); if (qf) qf.hidden = !a;
     fb.classList.toggle("on", f); fb.setAttribute("aria-pressed", f);
   });
   const pc = full[page];
@@ -346,10 +368,11 @@ async function loadResult() {
   try {
     const { data, error } = await sb.rpc("my_result", { p_attempt: attempt.id });
     if (error || !data) return;
+    if (data.pending) { $("#doneMsg").textContent = "Terima kasih. Sebagian jawaban Anda dinilai oleh trainer; nilai akan tampil di halaman ini setelah penilaian selesai."; return; }
     const pass = data.score >= data.pass_mark;
-    $("#doneMsg").textContent = "Terima kasih. Jawaban Anda telah diterima dan dinilai otomatis.";
+    $("#doneMsg").textContent = data.manual ? "Terima kasih. Penilaian jawaban Anda telah selesai." : "Terima kasih. Jawaban Anda telah diterima dan dinilai otomatis.";
     $("#result").innerHTML = `<div class="result"><div class="score"><div class="big">${data.score}<small> /100</small></div>
-      <div><div class="b">${esc(cat(data.score))}</div><div class="small mut">${data.right} dari ${data.total} benar · nilai lulus ${data.pass_mark}</div>
+      <div><div class="b">${esc(cat(data.score))}</div><div class="small mut">${data.right} dari ${data.total} pilihan ganda benar · nilai lulus ${data.pass_mark}</div>
       <div style="margin-top:8px"><span class="badge ${pass ? "b-ok" : "b-bad"}">${pass ? "Lulus" : "Belum lulus"}</span></div></div></div></div>`;
   } catch {}
 }

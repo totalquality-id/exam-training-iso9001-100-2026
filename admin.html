@@ -48,7 +48,7 @@
       <div class="stats" id="stats"></div>
       <div class="bar">
         <input type="search" id="qs" placeholder="Cari nama, jabatan, atau Copart" title="Tekan / untuk mencari">
-        <div class="seg" id="fs"><button class="on" data-v="all">Semua</button><button data-v="in_progress">Mengerjakan</button><button data-v="done">Selesai</button></div>
+        <div class="seg" id="fs"><button class="on" data-v="all">Semua</button><button data-v="in_progress">Mengerjakan</button><button data-v="grade" hidden>Perlu dinilai</button><button data-v="done">Selesai</button></div>
         <div class="sp"></div>
         <select id="sort" aria-label="Urutkan"><option value="new">Terbaru</option><option value="score">Nilai tertinggi</option><option value="low">Nilai terendah</option><option value="name">Nama A–Z</option></select>
       </div>
@@ -84,6 +84,9 @@
   <div class="card lg">
     <div class="m-h"><div><h2 id="mbTitle">Batch Baru</h2><p class="mut small" id="mbSub" style="margin:2px 0 0"></p></div><button class="m-x" id="mbX" type="button" aria-label="Tutup"><i data-i="x"></i></button></div>
     <form id="fBatch">
+      <label class="f" for="bnBank">Bank soal</label>
+      <select id="bnBank"></select>
+      <div class="hint" id="bnBankHint"></div>
       <div class="fgrid">
         <div><label class="f" for="bnName">Nama Copart</label><input id="bnName" type="text" maxlength="120" required placeholder="PT Sinar Jaya Abadi"></div>
         <div><label class="f" for="bnNote">Keterangan (opsional)</label><input id="bnNote" type="text" maxlength="200" placeholder="Angkatan 1 · 14 Oktober"></div>
@@ -112,5 +115,5 @@
 
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/exceljs/4.4.0/exceljs.min.js"></script>
-<script src="assets/icons.js"></script><script src="assets/config.js"></script><script src="assets/questions.js"></script><script src="assets/admin.js"></script>
+<script src="assets/icons.js"></script><script src="assets/config.js"></script><script src="assets/questions.js"></script><script src="assets/questions-mix50.js"></script><script src="assets/banks.js"></script><script src="assets/admin.js"></script>
 </body></html>

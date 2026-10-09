@@ -6,7 +6,7 @@
 -- =====================================================================
 
 -- 1) Pengaturan & jadwal pada batch
---    settings: { shuffle_q, shuffle_opt, show_score, require_all, track_focus (boolean), pass_mark (0–100) }
+--    settings: { bank (versi bank soal), shuffle_q, shuffle_opt, show_score, require_all (boolean), pass_mark (0–100) }
 alter table public.batches add column if not exists settings jsonb not null default '{}'::jsonb;
 alter table public.batches add column if not exists open_from timestamptz;
 alter table public.batches add column if not exists open_until timestamptz;
@@ -93,20 +93,29 @@ grant execute on function public.join_batch(text, text, text) to authenticated;
 --    Kunci jawaban tetap tidak pernah dikirim ke browser peserta; nilai dihitung di server.
 create or replace function public.my_result(p_attempt uuid) returns json
 language plpgsql stable security definer set search_path = public as $$
-declare a public.attempts; bs jsonb; k jsonb; n int; r int; show boolean;
+declare a public.attempts; bs jsonb; k jsonb; n int; r int; tfr int; man numeric; pm numeric; ver text; show boolean;
 begin
   select * into a from public.attempts where id = p_attempt and user_id = auth.uid();
   if not found or a.status = 'in_progress' then return null; end if;
   select settings into bs from public.batches where id = a.batch_id;
   show := coalesce((bs ->> 'show_score')::boolean, (a.settings ->> 'show_score')::boolean, false);
   if not show then return null; end if;
-  select config into k from public.grading_config where id = 1;
-  if k is null or (k ->> 'version') is distinct from (a.answers ->> 'v') then return null; end if;
+  -- versi bank soal dari jawaban; jawaban lama tanpa versi (format campuran) = bank 50 soal
+  ver := coalesce(a.answers ->> 'v', case when a.answers ? 'tf' or a.answers ? 'txt' then 'mix50-2026-v1' end);
+  select config into k from public.grading_config where config ->> 'version' = ver limit 1;
+  if k is null then return null; end if;
+  pm := coalesce((bs ->> 'pass_mark')::numeric, (a.settings ->> 'pass_mark')::numeric, 70);
   select count(*), count(*) filter (where upper(coalesce(a.answers -> 'mc' ->> e.key, '')) = e.value)
     into n, r from jsonb_each_text(k -> 'mc') e;
   if n = 0 then return null; end if;
-  return json_build_object('right', r, 'total', n, 'score', round(r * 100.0 / n, 1),
-    'pass_mark', coalesce((bs ->> 'pass_mark')::numeric, (a.settings ->> 'pass_mark')::numeric, 70));
+  if k ? 'manual' then
+    -- bank dengan penilaian manual: nilai baru tersedia setelah trainer selesai menilai
+    if a.status <> 'graded' then return json_build_object('pending', true); end if;
+    select count(*) filter (where coalesce(a.answers -> 'tf' ->> e.key, '') = e.value) into tfr from jsonb_each_text(coalesce(k -> 'tf', '{}'::jsonb)) e;
+    select coalesce(sum(nullif(a.manual_scores ->> (m ->> 'id'), '')::numeric), 0) into man from jsonb_array_elements(k -> 'manual') m;
+    return json_build_object('right', r, 'total', n, 'score', r * 2 + tfr + man, 'pass_mark', pm, 'manual', true);
+  end if;
+  return json_build_object('right', r, 'total', n, 'score', round(r * 100.0 / n, 1), 'pass_mark', pm);
 end $$;
 revoke execute on function public.my_result(uuid) from public, anon;
 grant execute on function public.my_result(uuid) to authenticated;

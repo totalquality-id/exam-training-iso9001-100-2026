@@ -37,6 +37,26 @@
           <input id="code" class="codein" type="text" inputmode="numeric" autocomplete="off" placeholder="000000" required />
           <div class="err" id="cErr"></div>
           <button class="btn block" id="bCode" type="submit">Lanjut</button>
+          <p class="fine"><button type="button" class="link" id="bRemLink">Punya kode remidi?</button></p>
+        </form>
+
+        <form id="fRemCode" hidden>
+          <label class="f" for="rcode" style="margin-top: 0">Kode remidi</label>
+          <input id="rcode" class="codein" type="text" autocomplete="off" autocapitalize="characters" spellcheck="false" placeholder="XXXXXXXX" required />
+          <div class="err" id="rcErr"></div>
+          <button class="btn block" id="bRemCode" type="submit">Lanjut</button>
+          <p class="fine"><button type="button" class="link" id="bRemBack">Masuk dengan kode batch</button></p>
+        </form>
+
+        <form id="fRem" hidden>
+          <div class="bmeta">
+            <div><b id="rName"></b><span id="rMeta"></span><span id="rInfo" style="display: block"></span></div>
+            <button type="button" class="link" id="bRemChange">Ganti</button>
+          </div>
+          <p class="small mut" style="margin: 12px 0 0">Ujian diulang dari awal. Nilai Anda di batch ini diperbarui setelah remidi selesai.</p>
+          <div class="err" id="rErr"></div>
+          <button class="btn block" id="bRemStart" type="submit">Mulai Remidi</button>
+          <p class="fine">Ujian berlangsung dalam mode layar penuh.</p>
         </form>
 
         <form id="fStart" hidden>
@@ -120,6 +140,12 @@
           Terima kasih. Hasil akan disampaikan oleh trainer. Anda dapat menutup halaman ini.
         </p>
         <div id="result"></div>
+        <div class="result rem" id="remBox" hidden>
+          <div class="b">Remidi tersedia</div>
+          <p class="small mut" id="remTxt" style="margin: 4px 0 0"></p>
+          <div class="err" id="remErr"></div>
+          <button class="btn block" id="bRemNow">Mulai Remidi</button>
+        </div>
       </div>
     </main>
 
@@ -149,6 +175,7 @@
     <script src="assets/config.js"></script>
     <script src="assets/questions.js"></script>
     <script src="assets/questions-mix50.js"></script>
+    <script src="assets/questions-klausul.js"></script>
     <script src="assets/banks.js"></script>
     <script src="assets/participant.js"></script>
   </body>

@@ -48,7 +48,7 @@
       <div class="stats" id="stats"></div>
       <div class="bar">
         <input type="search" id="qs" placeholder="Cari nama, jabatan, atau Copart" title="Tekan / untuk mencari">
-        <div class="seg" id="fs"><button class="on" data-v="all">Semua</button><button data-v="in_progress">Mengerjakan</button><button data-v="grade" hidden>Perlu dinilai</button><button data-v="done">Selesai</button></div>
+        <div class="seg" id="fs"><button class="on" data-v="all">Semua</button><button data-v="in_progress">Mengerjakan</button><button data-v="grade" hidden>Perlu dinilai</button><button data-v="done">Selesai</button><button data-v="fail" hidden>Belum lulus</button><button data-v="rem" hidden>Remidi</button></div>
         <div class="sp"></div>
         <select id="sort" aria-label="Urutkan"><option value="new">Terbaru</option><option value="score">Nilai tertinggi</option><option value="low">Nilai terendah</option><option value="name">Nama A–Z</option></select>
       </div>
@@ -101,7 +101,11 @@
           <div><label class="f" for="bnUntil">Ditutup pada (opsional)</label><input id="bnUntil" type="datetime-local"></div>
         </div>
         <div class="hint">Jadwal hanya membatasi kapan peserta dapat mulai. Peserta yang sudah mulai tetap dapat menyelesaikan ujian.</div>
+        <label class="f" for="bnRule">Nilai akhir setelah remidi</label>
+        <select id="bnRule"></select>
+        <div class="hint" id="bnRuleHint"></div>
       </div>
+      <div class="fsec" id="clSec" hidden></div>
       <div class="fsec">
         <h4>Aturan ujian</h4>
         <div class="toggles" id="toggles"></div>
@@ -113,7 +117,16 @@
   </div>
 </div>
 
+<div class="modal" id="mRem" hidden>
+  <div class="card lg">
+    <div class="m-h"><div><h2 id="mrTitle">Remidi</h2><p class="mut small" id="mrSub" style="margin:2px 0 0"></p></div><button class="m-x" id="mrX" type="button" aria-label="Tutup"><i data-i="x"></i></button></div>
+    <div id="mrBody"></div>
+    <div class="err" id="mrErr"></div>
+    <div class="m-f"><button type="button" class="btn ghost" id="mrNo">Tutup</button><button type="button" class="btn" id="mrGo">Buka remidi</button></div>
+  </div>
+</div>
+
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/exceljs/4.4.0/exceljs.min.js"></script>
-<script src="assets/icons.js"></script><script src="assets/config.js"></script><script src="assets/questions.js"></script><script src="assets/questions-mix50.js"></script><script src="assets/banks.js"></script><script src="assets/admin.js"></script>
+<script src="assets/icons.js"></script><script src="assets/config.js"></script><script src="assets/questions.js"></script><script src="assets/questions-mix50.js"></script><script src="assets/questions-klausul.js"></script><script src="assets/banks.js"></script><script src="assets/admin.js"></script>
 </body></html>

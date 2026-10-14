@@ -19,7 +19,7 @@ function toast(msg, kind) {
 // ---- cache lokal: salinan jawaban di perangkat, aman dari refresh & putus koneksi ----
 const readCache = () => { try { return JSON.parse(localStorage.getItem(CK)); } catch { return null; } };
 const writeCache = () => { try {
-  localStorage.setItem(CK, JSON.stringify({ attempt: { id: attempt.id, user_id: attempt.user_id, name: attempt.name, job_title: attempt.job_title, copart: attempt.copart, batch_id: attempt.batch_id, duration_minutes: attempt.duration_minutes, started_at: attempt.started_at, settings: attempt.settings || {} }, answers: ans, dirty, pending, done, page }));
+  localStorage.setItem(CK, JSON.stringify({ attempt: { id: attempt.id, user_id: attempt.user_id, name: attempt.name, job_title: attempt.job_title, copart: attempt.copart, batch_id: attempt.batch_id, duration_minutes: attempt.duration_minutes, started_at: attempt.started_at, settings: attempt.settings || {}, remedial: attempt.remedial || 0 }, answers: ans, dirty, pending, done, page }));
 } catch {} };
 
 async function init() {
@@ -27,25 +27,30 @@ async function init() {
   if ("serviceWorker" in navigator) navigator.serviceWorker.register("sw.js").catch(() => {});
   sb = supabase.createClient(CFG.SUPABASE_URL, CFG.SUPABASE_ANON_KEY, { auth: { storageKey: "exam-participant" } });
   const { data: { session } } = await sb.auth.getSession();
-  const c = readCache();
+  const c = readCache(), qs = new URLSearchParams(location.search), rq = qs.get("remidi");
   if (session && c && c.attempt && c.attempt.user_id === session.user.id) {          // lanjut dari perangkat ini, tanpa butuh internet
     attempt = c.attempt; dirty = !!c.dirty; pending = !!c.pending; done = !!c.done;
-    if (done) return showDone();
+    if (done) return rq ? remLookup(rq) : showDone();
     startExam(c.answers, c.page); if (pending) showSending(); syncFromServer(); return;
   }
   if (session) {                                                                      // perangkat/cache baru: ambil dari server
     const { data, error } = await sb.from("attempts").select("*").eq("user_id", session.user.id).order("started_at", { ascending: false }).limit(1);
     if (error) return fatal("Tidak dapat terhubung ke server. Jawaban Anda aman; periksa koneksi lalu muat ulang halaman ini.", "Koneksi terputus", true);
-    if (data && data[0]) { attempt = data[0]; if (attempt.status !== "in_progress") { done = true; writeCache(); return showDone(); } startExam(attempt.answers, 0); writeCache(); return; }
+    if (data && data[0]) {
+      attempt = data[0];
+      if (attempt.status === "in_progress") { startExam(attempt.answers, 0); writeCache(); return; }
+      done = true; writeCache(); if (!rq) return showDone();
+    }
   }
+  if (rq) return remLookup(rq);
   view("vStart"); showCode();
-  const k = new URLSearchParams(location.search).get("kode");
+  const k = qs.get("kode");
   if (k) { $("#code").value = k.replace(/\D/g, "").slice(0, 6); lookup(k); }
 }
 
 // ---- kode batch & data peserta ----
 let batch = null;
-function showCode() { batch = null; $("#fCode").hidden = false; $("#fStart").hidden = true; }
+function showCode() { batch = null; $("#fCode").hidden = false; $("#fStart").hidden = true; $("#fRem").hidden = true; $("#fRemCode").hidden = true; }
 $("#code").addEventListener("input", e => e.target.value = e.target.value.replace(/\D/g, "").slice(0, 6));
 $("#fCode").addEventListener("submit", e => { e.preventDefault(); lookup($("#code").value); });
 $("#bChange").onclick = () => { showCode(); $("#code").select(); };
@@ -78,6 +83,55 @@ $("#fStart").addEventListener("submit", async e => {
     attempt = data; startExam({}, 0); writeCache();
   } catch (err) { exitFs(); $("#sErr").textContent = "Gagal memulai: " + (err.message || err); $("#bStart").disabled = false; }
 });
+
+// ---- remidi: dibuka trainer untuk peserta di bawah KKM; mengulang di batch yang sama ----
+let remCode = null;
+$("#bRemLink").onclick = () => { $("#fCode").hidden = true; $("#fRemCode").hidden = false; $("#rcErr").textContent = ""; $("#rcode").focus(); };
+$("#bRemBack").onclick = () => { showCode(); $("#code").focus(); };
+$("#bRemChange").onclick = () => { $("#fRem").hidden = true; $("#fRemCode").hidden = false; $("#rcode").select(); };
+$("#rcode").addEventListener("input", e => e.target.value = e.target.value.toUpperCase().replace(/[^A-Z0-9]/g, "").slice(0, 8));
+$("#fRemCode").addEventListener("submit", e => { e.preventDefault(); remLookup($("#rcode").value); });
+async function remLookup(raw) {
+  view("vStart"); showCode(); $("#fCode").hidden = true; $("#fRemCode").hidden = false;
+  const code = String(raw || "").toUpperCase().replace(/[^A-Z0-9]/g, ""), err = m => $("#rcErr").textContent = m; err("");
+  $("#rcode").value = code;
+  if (code.length !== 8) return err("Kode remidi terdiri dari 8 huruf/angka.");
+  $("#bRemCode").disabled = true;
+  const { data, error } = await sb.rpc("get_remedial", { p_token: code });
+  $("#bRemCode").disabled = false;
+  if (error) return err("Tidak dapat memeriksa kode. Periksa koneksi lalu coba lagi.");
+  if (!data || !data.length) return err("Kode remidi tidak ditemukan, atau remidi ini sudah dimulai.");
+  const d = data[0], bk = window.bankOf(d.settings);
+  remCode = code;
+  $("#rName").textContent = d.name; $("#rMeta").textContent = d.job_title + (d.copart ? " · " + d.copart : "");
+  $("#rInfo").textContent = `Remidi ke-${d.remedial} · ${bk.total} soal · ${d.duration_minutes || bk.minutes} menit`;
+  $("#rErr").textContent = ""; $("#bRemStart").disabled = false;
+  $("#fRemCode").hidden = true; $("#fRem").hidden = false;
+}
+$("#fRem").addEventListener("submit", e => { e.preventDefault(); startRemedial({ p_token: remCode }, $("#rErr"), $("#bRemStart")); });
+$("#bRemNow").onclick = () => startRemedial({ p_attempt: attempt.id }, $("#remErr"), $("#bRemNow"));
+async function startRemedial(args, errEl, btn) {
+  errEl.textContent = ""; btn.disabled = true;
+  enterFs();                                         // harus dipanggil langsung dari klik pengguna
+  try {
+    const { data: { session } } = await sb.auth.getSession();
+    if (!session) { const { error } = await sb.auth.signInAnonymously(); if (error) throw error; }
+    const { data, error } = await sb.rpc("claim_remedial", args);
+    if (error) throw error;
+    attempt = data; done = false; pending = false; dirty = false; warned = {};
+    $("#result").innerHTML = ""; $("#remBox").hidden = true;
+    if (location.search) history.replaceState(null, "", location.pathname);
+    startExam({}, 0); writeCache();
+  } catch (err) { exitFs(); errEl.textContent = "Gagal memulai remidi: " + (err.message || err); btn.disabled = false; }
+}
+async function checkRemedial() {                   // perangkat yang sama: tampilkan tombol bila trainer membuka remidi
+  try {
+    const { data } = await sb.from("attempts").select("status,remedial").eq("id", attempt.id).maybeSingle();
+    if (!data || data.status !== "remedial") return;
+    $("#remTxt").textContent = `Trainer membuka remidi ke-${data.remedial} untuk Anda. Ujian diulang dari awal di batch yang sama; nilai Anda diperbarui setelah remidi selesai.`;
+    $("#remBox").hidden = false; $("#bRemNow").disabled = false;
+  } catch {}
+}
 
 // ---- mode terkunci: layar penuh, blokir pintasan/salin, catat keluar halaman ----
 const root = document.documentElement;
@@ -119,7 +173,7 @@ document.addEventListener("visibilitychange", () => {
   back(); if (dirty || pending) flush();
 });
 window.addEventListener("beforeunload", e => { if (active()) { e.preventDefault(); e.returnValue = ""; } });
-const inText = e => !!e.target && e.target.tagName === "TEXTAREA";
+const inText = e => !!e.target && (e.target.tagName === "TEXTAREA" || (e.target.tagName === "INPUT" && e.target.type === "text" && !!e.target.closest("#exam")));
 ["copy", "cut", "selectstart", "dragstart"].forEach(t => document.addEventListener(t, e => { if (!$("#vExam").hidden && !inText(e)) e.preventDefault(); }));
 ["paste", "drop", "contextmenu"].forEach(t => document.addEventListener(t, e => { if (!$("#vExam").hidden) e.preventDefault(); }));
 const EDIT_KEY = /^(a|c|x|z|y|arrowleft|arrowright|arrowup|arrowdown|backspace|delete|home|end)$/i;   // pintasan menyunting di kolom jawaban
@@ -137,20 +191,21 @@ function seeded(str) {
   for (let i = 0; i < str.length; i++) { h = Math.imul(h ^ str.charCodeAt(i), 3432918353); h = h << 13 | h >>> 19; }
   return () => { h = Math.imul(h ^ h >>> 16, 2246822507); h = Math.imul(h ^ h >>> 13, 3266489909); return ((h ^= h >>> 16) >>> 0) / 4294967296; };
 }
+const seedId = () => attempt.id + (attempt.remedial ? ":r" + attempt.remedial : "");   // remidi: urutan acak baru
 function shuffle(arr, rnd) { const a = [...arr]; for (let i = a.length - 1; i > 0; i--) { const j = Math.floor(rnd() * (i + 1)); [a[i], a[j]] = [a[j], a[i]]; } return a; }
 // Pilihan seperti "Semua benar" tetap di posisinya; soal yang pilihannya merujuk huruf lain ("A dan B") tidak diacak.
 const PIN = /^(semua (jawaban )?benar|ketiganya|keduanya benar|semua di atas)/i, REF = /\b[A-D]\s*(dan|atau|&|,)\s*[A-D]\b/;
 function optOrder(n, o) {
   const idx = o.map((_, k) => k);
   if (!S.shuffle_opt || o.some(t => REF.test(t))) return idx;
-  const free = idx.filter(k => !PIN.test(o[k].trim())), mixed = shuffle(free, seeded(attempt.id + ":o" + n));
+  const free = idx.filter(k => !PIN.test(o[k].trim())), mixed = shuffle(free, seeded(seedId() + ":o" + n));
   let f = 0; return idx.map(k => PIN.test(o[k].trim()) ? k : mixed[f++]);
 }
 function build() {
   QM = BK.item; disp = {}; secOf = {};
   order = BK.sections.map((sec, i) => {
     const ns = sec.items.map(it => it.n);
-    const sh = S.shuffle_q && sec.items.every(it => it.kind === "mc") ? shuffle(ns, seeded(attempt.id + ":q" + i)) : ns;   // hanya bagian pilihan ganda yang diacak
+    const sh = S.shuffle_q && sec.items.every(it => it.kind === "mc") ? shuffle(ns, seeded(seedId() + ":q" + i)) : ns;   // hanya bagian pilihan ganda yang diacak
     sh.forEach((n, j) => { disp[n] = ns[j]; secOf[n] = i; });            // nomor tampil tetap berurutan di tiap bagian
     return sh;
   });
@@ -160,14 +215,17 @@ function build() {
 function startExam(saved, pg) {
   // Jawaban dari versi soal lama (format berbeda) tidak dipakai agar tidak tercampur dengan kunci yang baru
   S = attempt.settings || {}; BK = window.bankOf(S);
+  if (BK.kind === "clause" && !BK.items.length) return fatal("Soal hafalan klausul belum diundi oleh server. Minta trainer menjalankan ulang supabase/settings.sql, lalu mulai ulang.", "Soal belum tersedia", true);
   const legacy = !!saved && !saved.v && BK.manual && !!(saved.tf || saved.txt);   // jawaban format lama tanpa versi = bank 50 soal
   const same = !!saved && (saved.v === BK.version || legacy), pick = k => same && saved[k] ? Object.assign({}, saved[k]) : {};
   ans = { v: BK.version, mc: pick("mc"), tf: pick("tf"), tfr: pick("tfr"), txt: pick("txt"), fl: same && Array.isArray(saved.fl) ? saved.fl.map(Number) : [], ev: same && saved.ev ? Object.assign({}, saved.ev) : {} };
+  if (same && saved.lk) ans.lk = 1;                  // hafalan klausul: jenis 1 sudah dikunci
   if (saved && !same && Object.keys(saved).length) dirty = true;
   $("#pTotal").textContent = BK.total;
   $("#whoN").textContent = attempt.name; $("#whoM").textContent = attempt.job_title + (attempt.copart ? " · " + attempt.copart : "");
   build(); shell();
   page = Math.min(Math.max(0, pg | 0), BK.sections.length - 1);
+  while (page > 0 && blocked(page)) page--;
   renderPage(); progress(); view("vExam"); net(); focusGrid();
   document.body.classList.add("exam-on"); markNoFs(); lockUI();
   const t = () => {
@@ -239,9 +297,13 @@ window.addEventListener("offline", net);
 window.addEventListener("online", () => { net(); if (ans && !done) flush(); });
 
 // ---- tampilan soal: satu bagian per halaman ----
-const KEY = { mc: "mc", tf: "tf", essay: "txt" };
+const KEY = { mc: "mc", tf: "tf", essay: "txt", short: "txt" };
 const answered = n => { const it = QM[n]; return !!it && !!String(ans[KEY[it.kind]][n] || "").trim(); };
 const isFl = n => ans.fl.includes(+n);
+// hafalan klausul berurutan: halaman jenis 2 terkunci sampai jenis 1 dikunci; setelah itu jawaban jenis 1 tidak dapat diubah
+const blocked = i => !!BK.seq && !ans.lk && BK.sections[i].part === "2";
+const frozen = n => !!BK.seq && !!ans.lk && QM[n].part === "1";
+const LOCKMSG = "Selesaikan dan kunci Jenis 1 terlebih dahulu untuk membuka Jenis 2.";
 function shell() {
   $("#grid").innerHTML = BK.sections.map((sec, i) => `<div class="gsec" data-s="${i}"><div class="gsec-h" data-p="${i}"><span>${BK.manual ? "" : i + 1 + ". "}${esc(sec.short || sec.name)}</span><em>0/${order[i].length}</em></div>
     <div class="g">${order[i].map(n => `<button type="button" class="gb" data-n="${n}">${disp[n]}</button>`).join("")}</div></div>`).join("");
@@ -254,19 +316,21 @@ function itemHtml(n) {
   else if (it.kind === "tf") body = `<div class="opts tf" role="radiogroup">${[["B", "Benar"], ["S", "Salah"]].map(([v, t]) =>
     `<label class="opt"><input type="radio" name="tf${n}" data-k="tf" data-n="${n}" value="${v}"><span class="k">${v}</span><span>${t}</span></label>`).join("")}</div>
     <label class="ta-l" for="r${n}">Alasan</label><textarea id="r${n}" data-k="tfr" data-n="${n}" rows="3" placeholder="Tuliskan alasan Anda"></textarea>`;
+  else if (it.kind === "short") body = `<input type="text" class="sa" data-k="txt" data-n="${n}" maxlength="200" autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false"${it.num ? ' inputmode="decimal"' : ""} placeholder="${esc(it.ph)}" aria-label="Jawaban soal ${disp[n]}"${frozen(n) ? " disabled" : ""}>`;
   else body = `<textarea data-k="txt" data-n="${n}" rows="6" aria-label="Jawaban soal ${disp[n]}" placeholder="Tuliskan jawaban Anda"></textarea>`;
-  return `<article class="q" id="q${n}"><div class="q-top"><span class="qno">Soal ${disp[n]}${it.label ? " · " + esc(it.label) : ""}</span><button type="button" class="flag" data-f="${n}" aria-pressed="false">Ragu-ragu</button></div>
-    <div class="qt">${esc(it.q)}</div>${body}${it.kind === "essay" ? "" : `<div class="q-foot" hidden><button type="button" class="clear" data-c="${n}">Hapus pilihan</button></div>`}</article>`;
+  return `<article class="q${it.kind === "short" ? " short" : ""}" id="q${n}"><div class="q-top"><span class="qno">Soal ${disp[n]}${it.label ? " · " + esc(it.label) : ""}</span><button type="button" class="flag" data-f="${n}" aria-pressed="false">Ragu-ragu</button></div>
+    <div class="qt">${esc(it.q)}${it.sub ? `<span class="qsub">${esc(it.sub)}</span>` : ""}</div>${body}${it.kind === "essay" || it.kind === "short" ? "" : `<div class="q-foot" hidden><button type="button" class="clear" data-c="${n}">Hapus pilihan</button></div>`}</article>`;
 }
 function renderPage() {
-  const sec = BK.sections[page], ns = order[page], N = BK.sections.length, last = page === N - 1;
+  const sec = BK.sections[page], ns = order[page], N = BK.sections.length, last = page === N - 1, toLock = !last && blocked(page + 1);
   let h = `<section><div class="page-h"><div><div class="ey">Bagian ${page + 1} dari ${N}</div><h2>${esc(sec.name)}</h2><p>Soal ${disp[ns[0]]}${ns.length > 1 ? "–" + disp[ns[ns.length - 1]] : ""}</p></div>
     <div class="page-prog"><b id="ppC">0</b> / ${ns.length} terjawab<div class="pbar"><i id="ppB" style="width:0"></i></div></div></div>
+    ${BK.seq && ans.lk && sec.part === "1" ? `<div class="alert info">Jenis 1 sudah dikunci. Jawaban di halaman ini hanya dapat dilihat.</div>` : ""}
     ${sec.intro ? `<p class="intro">${esc(sec.intro)}</p>` : ""}${sec.scenario ? `<div class="scn"><div class="ey">Kasus</div>${esc(sec.scenario)}</div>` : ""}`;
   ns.forEach(n => h += itemHtml(n));
   h += `<div class="pager"><button type="button" class="btn ghost" data-go="${page - 1}" ${page === 0 ? "disabled" : ""}>Sebelumnya</button>
     <span class="mid">${page + 1} / ${N}</span>
-    ${last ? `<button type="button" class="btn" data-submit>Tinjau &amp; Kirim</button>` : `<button type="button" class="btn" data-go="${page + 1}">Berikutnya</button>`}</div></section>`;
+    ${last ? `<button type="button" class="btn" data-submit>Tinjau &amp; Kirim</button>` : toLock ? `<button type="button" class="btn" data-lock>Kunci Jenis 1 &amp; Lanjut</button>` : `<button type="button" class="btn" data-go="${page + 1}">Berikutnya</button>`}</div></section>`;
   $("#exam").innerHTML = h; restore();
 }
 function restore() {
@@ -277,6 +341,7 @@ function restore() {
 }
 function goPage(i, n) {
   if (i < 0 || i >= BK.sections.length) return;
+  if (blocked(i)) return toast(LOCKMSG, "warn");
   const changed = i !== page; page = i;
   if (changed) { renderPage(); writeCache(); }
   progress(); if (changed) focusGrid();
@@ -294,8 +359,13 @@ $("#exam").addEventListener("change", e => {
   ans[el.dataset.k][el.dataset.n] = el.value; touch();
 });
 $("#exam").addEventListener("input", e => {
-  const el = e.target; if (el.tagName !== "TEXTAREA" || !el.dataset.k || done) return;
+  const el = e.target; if (!(el.tagName === "TEXTAREA" || (el.tagName === "INPUT" && el.type === "text")) || !el.dataset.k || done) return;
   ans[el.dataset.k][el.dataset.n] = el.value; touch();
+});
+$("#exam").addEventListener("keydown", e => {          // isian singkat: Enter pindah ke kolom berikutnya
+  if (e.key !== "Enter" || !e.target.classList.contains("sa")) return;
+  e.preventDefault(); const all = [...$$("#exam .sa:not([disabled])")], nx = all[all.indexOf(e.target) + 1];
+  if (nx) { nx.focus(); nx.scrollIntoView({ block: "center", behavior: "smooth" }); }
 });
 $("#exam").addEventListener("click", e => {
   if (done) return;
@@ -304,9 +374,11 @@ $("#exam").addEventListener("click", e => {
   else if (c) { delete ans[KEY[QM[c.dataset.c].kind]][c.dataset.c]; restore(); touch(); }
   else if (g) goPage(+g.dataset.go);
   else if (e.target.closest("[data-submit]")) openConfirm();
+  else if (e.target.closest("[data-lock]")) openLock();
 });
 $("#grid").addEventListener("click", e => {
-  const b = e.target.closest(".gb"), h = e.target.closest("[data-p]");
+  const b = e.target.closest(".gb"), h = e.target.closest("[data-p]"), sec = (b || h) && +(b || h).closest(".gsec").dataset.s;
+  if ((b || h) && blocked(sec)) return toast(LOCKMSG, "warn");
   if (b) jump(+b.dataset.n); else if (h) { closeSide(); goPage(+h.dataset.p); }
 });
 const openSide = () => { $("#side").classList.add("open"); $("#scrim").hidden = false; };
@@ -323,7 +395,7 @@ function progress() {
   $("#cA").textContent = c; $("#cF").textContent = ans.fl.length; $("#cU").textContent = BK.total - c;
   $("#fabTxt").textContent = `Navigasi soal · ${c}/${BK.total}`;
   const full = order.map(ns => ns.filter(answered).length);
-  $$(".gsec").forEach(s => { const i = +s.dataset.s; s.querySelector("em").textContent = full[i] + "/" + order[i].length; s.classList.toggle("on", i === page); });
+  $$(".gsec").forEach(s => { const i = +s.dataset.s; s.querySelector("em").textContent = full[i] + "/" + order[i].length; s.classList.toggle("on", i === page); s.classList.toggle("lk", blocked(i)); });
   $$(".gb[data-n]").forEach(b => { b.classList.toggle("a", answered(b.dataset.n)); b.classList.toggle("f", isFl(b.dataset.n)); });
   $$("#exam .q").forEach(q => {
     const n = q.id.slice(1), a = answered(n), f = isFl(n), fb = q.querySelector(".flag");
@@ -338,8 +410,9 @@ function progress() {
 const byDisp = ns => [...ns].sort((a, b) => disp[a] - disp[b]);
 const jl = (title, ns) => ns.length ? `<div class="jl"><h4>${title}</h4><div class="g">${ns.map(n =>
   `<button type="button" class="gb ${answered(n) ? "a" : ""} ${isFl(n) ? "f" : ""}" data-j="${n}">${disp[n]}</button>`).join("")}</div></div>` : "";
+let mMode = "submit";
 function openConfirm() {
-  closeSide();
+  closeSide(); mMode = "submit"; $("#mYes").textContent = "Kirim Final";
   const all = order.flat(), un = byDisp(all.filter(n => !answered(n))), fl = byDisp(ans.fl.filter(n => QM[n])), c = count(), block = S.require_all && un.length > 0;
   $("#mTitle").textContent = block ? "Masih ada soal kosong" : "Kirim jawaban?";
   $("#mInfo").textContent = un.length ? `${un.length} soal belum dijawab.${block ? " Semua soal wajib dijawab sebelum mengirim." : " Soal kosong dinilai 0."}` : fl.length ? "Semua soal terjawab, masih ada soal bertanda ragu-ragu." : "Semua soal terjawab. Jawaban tidak dapat diubah setelah dikirim.";
@@ -348,6 +421,21 @@ function openConfirm() {
   $("#ckRow").hidden = block; $("#mBtns").hidden = false; $("#mYes").hidden = block; $("#mX").hidden = false;
   $("#mNo").textContent = block ? "Lanjutkan" : "Kembali"; $("#mErr").textContent = "";
   $("#ck").checked = false; $("#mYes").disabled = true; $("#mConfirm").hidden = false;
+}
+function openLock() {                                 // hafalan klausul: kunci jenis 1 sebelum jenis 2 dibuka
+  closeSide(); mMode = "lock";
+  const p1 = BK.items.filter(it => it.part === "1").map(it => it.n), un = p1.filter(n => !answered(n)), fl = p1.filter(isFl), block = S.require_all && un.length > 0;
+  $("#mTitle").textContent = block ? "Jenis 1 belum lengkap" : "Kunci Jenis 1?";
+  $("#mInfo").textContent = (un.length ? `${un.length} soal Jenis 1 belum dijawab.${block ? " Semua soal wajib dijawab." : ""} ` : "")
+    + (block ? "" : "Setelah dikunci, jawaban Jenis 1 tidak dapat diubah lagi dan halaman Jenis 2 dibuka.");
+  $("#mSum").innerHTML = jl("Belum dijawab", un) + jl("Ragu-ragu", fl);
+  $("#ckRow").hidden = true; $("#mBtns").hidden = false; $("#mYes").hidden = block; $("#mX").hidden = false;
+  $("#mYes").textContent = "Kunci & Lanjut"; $("#mYes").disabled = false;
+  $("#mNo").textContent = block ? "Lanjutkan" : "Kembali"; $("#mErr").textContent = ""; $("#mConfirm").hidden = false;
+}
+function doLock() {
+  ans.lk = 1; $("#mConfirm").hidden = true; touch();
+  goPage(BK.sections.findIndex(sc => sc.part === "2"));
 }
 function showSending(msg) {
   $("#ckRow").hidden = true; $("#mBtns").hidden = true; $("#mX").hidden = true; $("#mSum").innerHTML = ""; $("#mConfirm").hidden = false;
@@ -359,20 +447,21 @@ function closeModal() { if (!pending) $("#mConfirm").hidden = true; }
 $("#mSum").addEventListener("click", e => { const b = e.target.closest("[data-j]"); if (b) { closeModal(); jump(+b.dataset.j); } });
 $("#ck").onchange = e => $("#mYes").disabled = !e.target.checked;
 $("#mNo").onclick = closeModal; $("#mX").onclick = closeModal;
-$("#mYes").onclick = () => { clearTimeout(saveT); pending = true; writeCache(); lockUI(); showSending(); flush(); };
+$("#mYes").onclick = () => { if (mMode === "lock") return doLock(); clearTimeout(saveT); pending = true; writeCache(); lockUI(); showSending(); flush(); };
 
 // ---- selesai: nilai tampil bila trainer mengaktifkan "tampilkan nilai" ----
-function showDone() { view("vDone"); window.scrollTo(0, 0); loadResult(); }
+function showDone() { view("vDone"); window.scrollTo(0, 0); loadResult(); checkRemedial(); }
 async function loadResult() {
   if (!attempt || !sb) return;
   try {
     const { data, error } = await sb.rpc("my_result", { p_attempt: attempt.id });
     if (error || !data) return;
     if (data.pending) { $("#doneMsg").textContent = "Terima kasih. Sebagian jawaban Anda dinilai oleh trainer; nilai akan tampil di halaman ini setelah penilaian selesai."; return; }
-    const pass = data.score >= data.pass_mark;
+    const pass = data.score >= data.pass_mark, what = data.kind === "clause" ? "soal klausul" : "pilihan ganda";
+    const rem = data.remedial ? ` · remidi ke-${data.remedial}${data.raw !== undefined && +data.raw !== +data.score ? ` (nilai remidi ${data.raw})` : ""}` : "";
     $("#doneMsg").textContent = data.manual ? "Terima kasih. Penilaian jawaban Anda telah selesai." : "Terima kasih. Jawaban Anda telah diterima dan dinilai otomatis.";
     $("#result").innerHTML = `<div class="result"><div class="score"><div class="big">${data.score}<small> /100</small></div>
-      <div><div class="b">${esc(cat(data.score))}</div><div class="small mut">${data.right} dari ${data.total} pilihan ganda benar · nilai lulus ${data.pass_mark}</div>
+      <div><div class="b">${esc(cat(data.score))}</div><div class="small mut">${data.right} dari ${data.total} ${what} benar · nilai lulus ${data.pass_mark}${rem}</div>
       <div style="margin-top:8px"><span class="badge ${pass ? "b-ok" : "b-bad"}">${pass ? "Lulus" : "Belum lulus"}</span></div></div></div></div>`;
   } catch {}
 }

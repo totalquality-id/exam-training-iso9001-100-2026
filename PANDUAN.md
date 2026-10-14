@@ -1,19 +1,23 @@
 # Panduan Setup — Total Quality Training Exam (ISO 9001:2026)
 
-Aplikasi statis (HTML/JS) + Supabase. Tidak ada server yang perlu Anda kelola. Satu aplikasi dan satu database melayani **dua bank soal** yang dipilih per batch:
+Aplikasi statis (HTML/JS) + Supabase. Tidak ada server yang perlu Anda kelola. Satu aplikasi dan satu database melayani **tiga bank soal** yang dipilih per batch:
 
 | Bank soal | Isi | Penilaian | Durasi bawaan |
 |---|---|---|---|
 | **100 soal pilihan ganda** | 100 PG dalam 9 area | Otomatis, 1 poin per soal | 90 menit |
 | **50 soal campuran** | A: 25 PG · B: 5 benar/salah + alasan · C: 5 studi kasus · D: kasus terpadu | PG & benar/salah otomatis; alasan dan studi kasus dinilai trainer dengan rubrik | 75 menit |
+| **Hafalan klausul ISO 9001:2026** | Jenis 1: nomor → judul klausul · Jenis 2: judul → nomor (78 klausul, Edisi 6) | Otomatis dengan toleransi salah ketik; trainer dapat mengoreksi per soal | 60 menit |
 
 ## Untuk instalasi yang sudah berjalan — yang perlu dilakukan sekarang
 Jalankan di Supabase → **SQL Editor** (semua aman dijalankan ulang; data peserta & batch tidak dihapus):
-1. `supabase/settings.sql` — pengaturan per batch, termasuk **pilihan bank soal**, dan fungsi nilai untuk peserta. **Jalankan ulang walaupun sudah pernah**, karena fungsi `my_result` diperbarui agar mendukung bank 50 soal.
-2. `supabase/bank_mix50.sql` — kunci jawaban & rubrik bank 50 soal (disimpan sebagai baris kedua tabel `grading_config`).
-3. Deploy ulang situs (Vercel otomatis setelah push), lalu login ulang di `admin.html`.
+1. `supabase/settings.sql` — **jalankan ulang walaupun sudah pernah**. Versi ini menambah kolom & fungsi **remidi**, **undian soal bank klausul**, dan memperbarui `my_result` (nilai klausul & nilai setelah remidi).
+2. `supabase/bank_mix50.sql` — kunci & rubrik bank 50 soal (lewati bila sudah pernah).
+3. `supabase/bank_klausul.sql` — kunci bank hafalan klausul (baris ketiga `grading_config`).
+4. Deploy ulang situs (Vercel otomatis setelah push), lalu login ulang di `admin.html`.
 
-Setelah itu, **Batch Baru → Bank soal** menampilkan kedua pilihan. Selama `bank_mix50.sql` belum dijalankan, pilihan 50 soal nonaktif dan tab Batch menampilkan peringatan.
+Setelah itu, **Batch Baru → Bank soal** menampilkan ketiga pilihan. Bank yang kuncinya belum ada di database tampil nonaktif beserta nama file SQL yang perlu dijalankan.
+
+> Penting: jalankan `settings.sql` **sebelum** situs baru dipakai peserta. Tanpa itu, peserta bank klausul tidak mendapat soal dan remidi gagal disimpan.
 
 ## Isi paket
 | File | Fungsi |
@@ -23,14 +27,16 @@ Setelah itu, **Batch Baru → Bank soal** menampilkan kedua pilihan. Selama `ban
 | `assets/config.js` | **Tempat Anda mengisi kredensial Supabase** |
 | `assets/questions.js` | Bank soal 100 pilihan ganda (tanpa kunci) |
 | `assets/questions-mix50.js` | Bank soal 50 soal campuran (tanpa kunci & rubrik) |
-| `assets/banks.js` | Daftar bank soal; menyeragamkan struktur kedua bank untuk halaman peserta & admin |
+| `assets/questions-klausul.js` | Bank hafalan klausul: daftar nomor & daftar judul ber-ID acak (tanpa pasangan kunci) |
+| `assets/banks.js` | Daftar bank soal; menyeragamkan struktur semua bank untuk halaman peserta & admin, termasuk penilaian klausul |
 | `assets/icons.js` | Ikon yang dipakai halaman peserta & admin |
 | `assets/logo.png` | **Logo Anda** (lihat bagian Logo) |
 | `sw.js` | Menyimpan aplikasi di browser agar bisa di-refresh saat offline |
 | `supabase/schema.sql` | Tabel, keamanan (RLS), kunci jawaban bank 100 soal |
 | `supabase/batch.sql` | Fitur batch per Copart |
-| `supabase/settings.sql` | Pengaturan ujian per batch (bank soal, jadwal, acak soal/pilihan, nilai lulus, tampilkan nilai, wajib jawab semua) |
+| `supabase/settings.sql` | Pengaturan ujian per batch (bank soal, jadwal, acak soal/pilihan, nilai lulus, tampilkan nilai, wajib jawab semua), undian soal klausul, dan remidi |
 | `supabase/bank_mix50.sql` | Kunci jawaban & rubrik bank 50 soal campuran |
+| `supabase/bank_klausul.sql` | Kunci bank hafalan klausul (pasangan nomor ↔ judul) |
 | `supabase/update_questions.sql` | Mengganti kunci bank 100 soal (untuk instalasi lama) |
 
 ## Instalasi baru
@@ -45,8 +51,8 @@ Setelah itu, **Batch Baru → Bank soal** menampilkan kedua pilihan. Selama `ban
 ### Langkah 3 — Jalankan SQL (urut)
 1. Buka `supabase/schema.sql`, pastikan email admin di bagian `insert into public.admins` sama dengan email dari Langkah 2.
 2. Supabase → **SQL Editor → New query** → tempel seluruh isi file → **Run**. Harus muncul "Success".
-3. Jalankan dengan cara yang sama, berurutan: `supabase/batch.sql` → `supabase/settings.sql` → `supabase/bank_mix50.sql`.
-4. Cek di **Table Editor**: ada tabel `attempts`, `batches`, `grading_config` (2 baris), `admins`.
+3. Jalankan dengan cara yang sama, berurutan: `supabase/batch.sql` → `supabase/settings.sql` → `supabase/bank_mix50.sql` → `supabase/bank_klausul.sql`.
+4. Cek di **Table Editor**: ada tabel `attempts`, `batches`, `grading_config` (3 baris), `admins`.
 
 > Kunci jawaban, pembahasan, dan rubrik tersimpan di tabel `grading_config` dan hanya bisa dibaca akun admin. Peserta tidak dapat melihatnya lewat browser.
 
@@ -85,6 +91,50 @@ Pilih salah satu hosting statis (gratis): Vercel, Netlify, Cloudflare Pages, ata
 6. Gunakan **Sebelumnya / Berikutnya** (atau tombol ← →) untuk berpindah antar peserta dengan cepat; filter **Perlu dinilai** membuat urutan ini hanya berisi peserta yang belum dinilai.
 7. Detail juga menampilkan rincian per bagian (A/B/C/D), Knowledge (/60) · Application (/20) · Transition (/20), peringatan bila Application < 60% meskipun total ≥ 70, serta rekomendasi workshop remedial.
 8. Jika **Tampilkan nilai ke peserta** aktif, peserta melihat pesan "nilai akan tampil setelah penilaian selesai"; setelah status **Selesai**, nilai muncul saat peserta membuka ulang halaman.
+
+## Bank hafalan klausul ISO 9001:2026
+Sumber: daftar klausul final Edisi 6 (78 klausul, 1 s.d. 10.2). Dua jenis soal isian singkat:
+- **Jenis 1 · Nomor → Judul** — peserta melihat "Klausul 7.1.4" dan menuliskan judulnya.
+- **Jenis 2 · Judul → Nomor** — peserta melihat "Lingkungan untuk Pengoperasian Proses" dan menuliskan "7.1.4". Judul **Umum** muncul di 8 klausul (5.1.1, 7.1.1, 7.5.1, 8.3.1, 8.4.1, 9.1.1, 9.2.1, 9.3.1), jadi selalu diberi petunjuk induknya ("bagian dari: Sumber Daya") agar jawabannya tunggal.
+
+**Pengaturan per batch** (muncul di form batch saat bank ini dipilih):
+| Pengaturan | Keterangan |
+|---|---|
+| Cakupan klausul utama | Klausul 1–10 yang diikutkan (mis. hanya 4–10). |
+| Tingkat klausul | Klausul utama (4), sub-klausul (4.1), sub-sub-klausul (5.1.1). |
+| Jenis 1 / Jenis 2 aktif | Satu atau kedua jenis. |
+| Tampilkan semua nomor / semua keterangan | Aktif: semua klausul dalam cakupan ditanyakan. Mati: diundi sejumlah N klausul, **berbeda untuk setiap peserta**. |
+| Acak urutan | Jenis 1 bawaan berurutan (seperti daftar isi); Jenis 2 bawaan diacak — bila tidak diacak, nomor mudah ditebak dari posisinya. |
+| Klausul berbeda untuk Jenis 1 & 2 | Saat sebagian diundi, Jenis 2 memakai klausul yang tidak ditanyakan di Jenis 1. |
+| Kerjakan berurutan | Jenis 2 baru terbuka setelah peserta menekan **Kunci Jenis 1 & Lanjut**; setelah itu jawaban Jenis 1 tidak dapat diubah. Mencegah daftar judul di Jenis 2 dipakai sebagai contekan Jenis 1. |
+
+- Soal diundi **di server** saat peserta menekan Mulai Ujian, lalu disimpan di data peserta (tidak dapat diubah peserta). Kunci nomor ↔ judul hanya ada di database.
+- Soal tampil 20 per halaman; tombol Enter pindah ke kolom berikutnya.
+- **Penilaian**: 1 poin per soal, nilai = benar ÷ jumlah soal × 100. Jenis 1: huruf besar/kecil, tanda baca, dan "&"/"dan" diabaikan; salah ketik kecil (jarak edit ≤ 15% panjang judul) tetap benar. Jenis 2: "Klausul 7.1.4.", "7,1,4" dianggap "7.1.4"; nomor harus tepat.
+- **Koreksi trainer**: di detail peserta, setiap soal punya tombol **Anggap benar / Anggap salah** (mis. urutan kata tertukar). Koreksi tersimpan otomatis, ikut dihitung di nilai peserta, Excel, dan filter **Dikoreksi**.
+- Analisis soal untuk bank ini dihitung **per klausul** (karena tiap peserta mendapat soal berbeda), termasuk jawaban salah yang paling sering — berguna untuk melihat klausul yang sering tertukar.
+
+## Remidi (peserta di bawah KKM)
+Remidi memakai **batch dan baris peserta yang sama** — tidak perlu membuat batch baru, dan nilai di batch langsung diperbarui setelah remidi selesai.
+1. Tab **Batch** → tombol **Remidi (n)** pada kartu batch (n = peserta belum lulus), atau tombol **Buka remidi** di detail peserta. Filter **Belum lulus** dan **Remidi** tersedia di daftar Peserta.
+2. Pilih peserta → **Buka remidi**. Jawaban & nilai saat ini disimpan di **Riwayat percobaan**, lalu peserta berstatus **Remidi · belum mulai** dan mendapat **kode remidi 8 karakter**.
+3. Peserta memulai remidi dengan salah satu cara:
+   - membuka halaman ujian di **perangkat yang sama** → muncul tombol **Mulai Remidi**;
+   - membuka **tautan remidi** (`https://domain-anda/?remidi=KODE`) atau memilih **Punya kode remidi?** di halaman awal — bisa dari perangkat mana pun.
+4. Timer mulai saat peserta menekan Mulai Remidi. Durasi & aturan diambil dari pengaturan batch saat itu; bank soal tetap sama dengan ujian awal (bank klausul: soal diundi ulang; bank PG: urutan acak baru). Batch yang sudah ditutup tetap bisa dipakai untuk remidi.
+5. Kode berlaku sekali; setelah dipakai, kode hangus. Remidi yang belum dimulai bisa **dibatalkan** (nilai sebelumnya dipulihkan). Remidi bisa dibuka lagi bila peserta masih belum lulus.
+
+**Nilai akhir setelah remidi** (form batch → *Nilai akhir setelah remidi*, berlaku langsung):
+| Aturan | Nilai akhir |
+|---|---|
+| Tertinggi, remidi maksimal KKM *(bawaan)* | Nilai remidi dibatasi setinggi KKM; bila lebih rendah dari nilai sebelumnya, nilai sebelumnya yang dipakai. Contoh KKM 70: awal 55, remidi 85 → **70**. |
+| Nilai tertinggi | Nilai tertinggi dari semua percobaan (contoh di atas → 85). |
+| Nilai remidi terakhir | Nilai remidi apa adanya, walaupun lebih rendah. |
+
+Daftar peserta, kartu, rata-rata, kelulusan, nilai yang dilihat peserta, dan Excel memakai nilai akhir ini. Detail peserta & Excel tetap menampilkan nilai awal dan nilai remidi mentahnya.
+
+## Duplikat batch
+Tombol **Duplikat** pada kartu batch membuka form berisi salinan pengaturan (bank soal, durasi, nilai lulus, aturan ujian, pengaturan klausul, aturan remidi). Ubah nama Copart bila perlu, lalu **Buat Salinan** — kode 6 angka baru dibuat otomatis. Peserta tidak ikut disalin; jadwal yang sudah lewat tidak disalin.
 
 ## Data peserta lama
 Peserta yang dulu mengerjakan bank 50 soal sebelum sistem ini (sebelumnya tertulis **"Soal versi lama"**) kini dikenali otomatis sebagai bank 50 soal, berstatus **Perlu dinilai**, dan bisa dinilai dengan rubrik seperti biasa — setelah `bank_mix50.sql` dijalankan. Skor rubrik yang dulu sudah diisi tetap terbaca.
@@ -144,7 +194,7 @@ Bank soal, durasi, pengacakan, dan wajib jawab semua disalin ke data peserta saa
 - Bank soal baru dapat ditambahkan dengan mendaftarkannya di `assets/banks.js` dan menambah baris baru di `grading_config` (id berikutnya).
 
 ## Logo
-Simpan logo Anda sebagai `assets/logo.png` (PNG transparan, lebar ≥ 300 px). Setelah mengganti logo, naikkan angka versi `exam-shell-v9` di `sw.js` (mis. `v10`) agar browser peserta memuat file baru.
+Simpan logo Anda sebagai `assets/logo.png` (PNG transparan, lebar ≥ 300 px). Setelah mengganti logo, naikkan angka versi `exam-shell-v10` di `sw.js` (mis. `v11`) agar browser peserta memuat file baru.
 
 ## Ketahanan saat koneksi putus
 - Setiap perubahan jawaban (termasuk ketikan esai) langsung disimpan di perangkat peserta, lalu disinkronkan ke Supabase otomatis (debounce 1,2 detik, ulang tiap 5 detik jika gagal, dan segera saat koneksi kembali).
@@ -166,6 +216,9 @@ Simpan logo Anda sebagai `assets/logo.png` (PNG transparan, lebar ≥ 300 px). S
 | "Akun ini bukan admin…" saat login | Email di `schema.sql` tidak sama dengan email login, atau SQL belum dijalankan |
 | "Kunci jawaban bank 100 soal belum sesuai" | Jalankan `supabase/update_questions.sql` |
 | Pilihan bank 50 soal nonaktif / peringatan di tab Batch | Jalankan `supabase/bank_mix50.sql` |
+| Pilihan bank hafalan klausul nonaktif | Jalankan `supabase/bank_klausul.sql` |
+| Peserta bank klausul melihat "Soal belum tersedia" | `settings.sql` versi baru belum dijalankan; jalankan, lalu hapus entri peserta itu dan minta mulai ulang |
+| "Gagal membuka remidi … jalankan ulang supabase/settings.sql" | Kolom remidi belum ada; jalankan ulang `settings.sql` |
 | Peserta bank 50 soal tidak melihat nilai setelah dinilai | Jalankan ulang `supabase/settings.sql` (fungsi `my_result` versi baru), pastikan **Tampilkan nilai** aktif |
 | "row-level security" saat peserta mulai | `schema.sql` belum dijalankan penuh |
 | Halaman menampilkan "Konfigurasi belum lengkap" | `config.js` masih berisi teks GANTI_… |

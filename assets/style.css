@@ -107,6 +107,14 @@ input:disabled,textarea:disabled{background:rgba(15,27,51,.04);color:var(--mut);
 .q textarea{background:rgba(255,255,255,.75);min-height:96px}
 #vExam textarea{-webkit-user-select:text;user-select:text}
 .ta-l{display:block;font-size:12px;font-weight:600;color:var(--mut);margin:12px 0 6px}
+/* isian singkat (hafalan klausul) */
+.q.short{padding:14px 18px;margin-bottom:8px}
+.q.short .q-top{margin-bottom:4px}
+.q.short .qt{margin-bottom:10px;font-size:15.5px;font-weight:600}
+.qsub{display:block;margin-top:2px;font-size:12.5px;font-weight:500;color:var(--mut)}
+.q .sa{background:rgba(255,255,255,.75)}
+#vExam input.sa{-webkit-user-select:text;user-select:text}
+.gsec.lk{opacity:.45}.gsec.lk .gsec-h,.gsec.lk .gb{cursor:not-allowed}
 .intro{margin:-6px 2px 16px;font-size:13.5px;color:var(--mut)}
 .scn{margin:0 0 16px;padding:16px 18px;border-radius:12px;background:rgba(240,245,253,.8);border:1px solid rgba(0,71,171,.12);font-size:14.5px;line-height:1.65;color:var(--ink-2)}
 .scn .ey{font-size:11px;font-weight:600;letter-spacing:.08em;text-transform:uppercase;color:var(--brand);margin-bottom:6px}
@@ -172,6 +180,7 @@ input:disabled,textarea:disabled{background:rgba(15,27,51,.04);color:var(--mut);
 .done h1{font-size:22px}
 .result{margin:26px auto 0;text-align:left;padding:22px;border-radius:16px;background:var(--glass);border:1px solid rgba(255,255,255,.75);box-shadow:var(--edge),var(--sh)}
 .result .score{display:flex;align-items:center;gap:22px}
+.result.rem{margin-top:14px}.result.rem .btn.block{margin-top:14px}
 .result .big{font-size:44px;font-weight:650;line-height:1;letter-spacing:-.03em;color:var(--brand);font-variant-numeric:tabular-nums}.result .big small{font-size:15px;color:var(--mut);font-weight:500;letter-spacing:0}
 
 /* ---------- admin ---------- */
@@ -254,6 +263,24 @@ td.small{white-space:nowrap}
 .sw input:checked+i{background:var(--brand)}.sw input:checked+i::after{transform:translateX(16px)}
 .sw input:focus-visible+i{box-shadow:0 0 0 3px rgba(0,71,171,.25)}
 .sw input:disabled+i{opacity:.4}
+/* pengaturan hafalan klausul */
+.chips{display:flex;flex-wrap:wrap;gap:6px}
+.chips button{font:inherit;font-size:12.5px;font-weight:500;border:1px solid var(--line-2);background:rgba(255,255,255,.6);color:var(--ink-2);border-radius:7px;padding:4px 11px;cursor:pointer;font-variant-numeric:tabular-nums}
+.chips button span{color:var(--mut-2);font-size:11.5px}
+.chips button.on{background:var(--brand-l);border-color:rgba(0,71,171,.45);color:var(--brand);font-weight:600}.chips button.on span{color:var(--brand)}
+.clp{margin-top:14px;padding:2px 14px;border:1px solid var(--line);border-radius:12px;background:rgba(255,255,255,.4)}
+.clp-b{padding-left:14px;border-left:2px solid var(--brand-m);margin:0 0 10px}
+.clp-n{padding:0 0 8px}.clp-n label.f{margin-top:6px}.clp-n input{max-width:160px}
+#clSec>.tg{padding-left:2px}
+/* remidi */
+.mr-h{display:flex;align-items:center;justify-content:space-between;gap:10px;margin:20px 0 8px;font-size:12px;font-weight:600;text-transform:uppercase;letter-spacing:.07em;color:var(--mut)}
+.mr-h .btn{text-transform:none;letter-spacing:0}
+.rlist{border:1px solid var(--line);border-radius:12px;background:rgba(255,255,255,.5);max-height:280px;overflow-y:auto}
+.rrow{display:flex;align-items:center;gap:10px;padding:9px 14px;border-bottom:1px solid var(--line);font-size:13.5px}.rrow:last-child{border-bottom:0}
+.rrow>div:first-child,.ck2>div{flex:1;min-width:0}
+.ck2{cursor:pointer}.ck2 input{margin:0}
+.code.sm{font-size:14px;letter-spacing:.1em}
+.remline{display:flex;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap;margin-top:14px;padding-top:12px;border-top:1px solid var(--line)}
 /* detail peserta */
 .dhead{display:flex;justify-content:space-between;gap:16px;flex-wrap:wrap;align-items:flex-start;margin:6px 0 18px}
 .dgrid{display:grid;grid-template-columns:repeat(4,1fr);gap:12px;margin:0 0 14px}

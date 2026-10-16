@@ -22,13 +22,13 @@
   <aside class="side-nav" aria-label="Navigasi utama">
     <div class="sn-brand"><img class="logo-img" src="assets/logo.png" alt="Total Quality" onerror="this.outerHTML='<div class=logo>TQ</div>'"><span>Trainer Console</span></div>
     <div class="sn-ctx">
-      <label for="fb">Batch</label>
+      <label for="fb">Filter</label>
       <select id="fb" aria-describedby="fbHint"></select>
       <div class="sn-hint" id="fbHint">Berlaku untuk Peserta dan Analisis</div>
     </div>
     <nav class="sn-list">
       <a class="sn-i" data-p="list" href="#/peserta"><span>Peserta</span><em id="nList"></em></a>
-      <a class="sn-i" data-p="batch" href="#/batch"><span>Batch</span><em id="nBatch"></em></a>
+      <a class="sn-i" data-p="batch" href="#/training"><span>Copart &amp; Training</span><em id="nBatch"></em></a>
       <a class="sn-i" data-p="anal" href="#/analisis"><span>Analisis soal</span></a>
     </nav>
     <div class="sn-foot">
@@ -57,13 +57,10 @@
     </section>
 
     <section id="pgBatch" hidden>
-      <div class="phead">
-        <div><h1>Batch</h1><p class="mut">Satu batch untuk satu Copart, dengan durasi, jadwal, dan aturan masing-masing.</p></div>
-        <div class="ctl"><button class="btn" id="bNew">Batch Baru</button></div>
-      </div>
+      <div id="bHead"></div>
       <div id="bWarn"></div>
       <div id="bnOk"></div>
-      <div class="bgrid" id="bt"></div>
+      <div id="bt"></div>
       <div style="height:60px"></div>
     </section>
 
@@ -84,11 +81,14 @@
   <div class="card lg">
     <div class="m-h"><div><h2 id="mbTitle">Batch Baru</h2><p class="mut small" id="mbSub" style="margin:2px 0 0"></p></div><button class="m-x" id="mbX" type="button" aria-label="Tutup"><i data-i="x"></i></button></div>
     <form id="fBatch">
+      <div id="bnTrnW"><label class="f" for="bnTrn">Training</label>
+      <select id="bnTrn"></select>
+      <div class="hint">Batch adalah satu test di dalam Training. Nilai tiap batch menjadi kolom Nilai Test pada laporan Training.</div></div>
       <label class="f" for="bnBank">Bank soal</label>
       <select id="bnBank"></select>
       <div class="hint" id="bnBankHint"></div>
       <div class="fgrid">
-        <div><label class="f" for="bnName">Nama Copart</label><input id="bnName" type="text" maxlength="120" required placeholder="PT Sinar Jaya Abadi"></div>
+        <div><label class="f" for="bnName" id="bnNameL">Nama batch / test</label><input id="bnName" type="text" maxlength="120" required placeholder="Post-test ISO 9001"></div>
         <div><label class="f" for="bnNote">Keterangan (opsional)</label><input id="bnNote" type="text" maxlength="200" placeholder="Angkatan 1 · 14 Oktober"></div>
       </div>
       <div class="fsec">
@@ -113,6 +113,43 @@
       <div class="alert info" id="mbNote"></div>
       <div class="err" id="bnErr"></div>
       <div class="m-f"><button type="button" class="btn ghost" id="mbNo">Batal</button><button class="btn" id="bnAdd" type="submit">Buat Batch</button></div>
+    </form>
+  </div>
+</div>
+
+<div class="modal" id="mCop" hidden>
+  <div class="card">
+    <div class="m-h"><div><h2 id="mcTitle">Copart Baru</h2><p class="mut small" style="margin:2px 0 0">Langkah 1 dari 3: Copart → Training → Batch</p></div><button class="m-x" id="mcX" type="button" aria-label="Tutup"><i data-i="x"></i></button></div>
+    <form id="fCop">
+      <label class="f" for="cpName">Nama Copart</label><input id="cpName" type="text" maxlength="120" required placeholder="PT Sinar Jaya Abadi">
+      <label class="f" for="cpNote">Keterangan (opsional)</label><input id="cpNote" type="text" maxlength="200" placeholder="Kota, PIC, atau catatan lain">
+      <div class="err" id="cpErr"></div>
+      <div class="m-f"><button type="button" class="btn ghost" id="mcNo">Batal</button><button class="btn" id="cpGo" type="submit">Buat Copart</button></div>
+    </form>
+  </div>
+</div>
+
+<div class="modal" id="mTrn" hidden>
+  <div class="card lg">
+    <div class="m-h"><div><h2 id="mtTitle">Training Baru</h2><p class="mut small" id="mtSub" style="margin:2px 0 0"></p></div><button class="m-x" id="mtX" type="button" aria-label="Tutup"><i data-i="x"></i></button></div>
+    <form id="fTrn">
+      <label class="f" for="tnName">Nama training</label><input id="tnName" type="text" maxlength="200" required placeholder="Training Information Security Management System">
+      <div class="fgrid">
+        <div><label class="f" for="tnFrom">Tanggal mulai</label><input id="tnFrom" type="date"></div>
+        <div><label class="f" for="tnTo">Tanggal selesai</label><input id="tnTo" type="date"></div>
+        <div><label class="f" for="tnPass">Nilai minimal lulus (laporan)</label><input id="tnPass" type="number" min="0" max="100" step="1" value="70"></div>
+        <div><label class="f" for="tnForm">Kode formulir (opsional)</label><input id="tnForm" type="text" maxlength="40" placeholder="FM-SDD-001"></div>
+      </div>
+      <div class="hint">Nilai akhir peserta di laporan = rata-rata nilai semua batch (test) di training ini. Lulus bila nilai akhir ≥ nilai minimal lulus.</div>
+      <div class="fsec">
+        <h4>Tanda tangan laporan</h4>
+        <div class="sig sig-h"><span>Kolom</span><span>Nama</span><span>Jabatan</span></div>
+        <div id="tnSig"></div>
+        <div class="hint">Kosongkan nama dan jabatan bila kolom tanda tangan tidak diperlukan. Diisi otomatis dari training sebelumnya.</div>
+      </div>
+      <label class="f" for="tnNote">Catatan laporan (opsional)</label><input id="tnNote" type="text" maxlength="300" placeholder="Tampil di bagian Note pada laporan">
+      <div class="err" id="tnErr"></div>
+      <div class="m-f"><button type="button" class="btn ghost" id="mtNo">Batal</button><button class="btn" id="tnGo" type="submit">Buat Training</button></div>
     </form>
   </div>
 </div>

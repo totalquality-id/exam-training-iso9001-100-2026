@@ -13,7 +13,8 @@ Jalankan di Supabase → **SQL Editor** (semua aman dijalankan ulang; data peser
 1. `supabase/settings.sql` — **jalankan ulang walaupun sudah pernah**. Versi ini menambah kolom & fungsi **remidi**, **undian soal bank klausul**, dan memperbarui `my_result` (nilai klausul & nilai setelah remidi).
 2. `supabase/bank_mix50.sql` — kunci & rubrik bank 50 soal (lewati bila sudah pernah).
 3. `supabase/bank_klausul.sql` — kunci bank hafalan klausul (baris ketiga `grading_config`).
-4. Deploy ulang situs (Vercel otomatis setelah push), lalu login ulang di `admin.html`.
+4. `supabase/training.sql` — **baru**: Copart → Training → Batch dan laporan rekap per Training. Batch lama otomatis dikelompokkan (lihat *Copart, Training, dan Batch*). Jalankan **setelah** `settings.sql`; bila `settings.sql` dijalankan ulang di kemudian hari, jalankan ulang `training.sql` sesudahnya.
+5. Deploy ulang situs (Vercel otomatis setelah push), lalu login ulang di `admin.html`.
 
 Setelah itu, **Batch Baru → Bank soal** menampilkan ketiga pilihan. Bank yang kuncinya belum ada di database tampil nonaktif beserta nama file SQL yang perlu dijalankan.
 
@@ -34,6 +35,7 @@ Setelah itu, **Batch Baru → Bank soal** menampilkan ketiga pilihan. Bank yang 
 | `sw.js` | Menyimpan aplikasi di browser agar bisa di-refresh saat offline |
 | `supabase/schema.sql` | Tabel, keamanan (RLS), kunci jawaban bank 100 soal |
 | `supabase/batch.sql` | Fitur batch per Copart |
+| `supabase/training.sql` | Copart → Training → Batch, pengelompokan batch lama, dan data laporan per Training |
 | `supabase/settings.sql` | Pengaturan ujian per batch (bank soal, jadwal, acak soal/pilihan, nilai lulus, tampilkan nilai, wajib jawab semua), undian soal klausul, dan remidi |
 | `supabase/bank_mix50.sql` | Kunci jawaban & rubrik bank 50 soal campuran |
 | `supabase/bank_klausul.sql` | Kunci bank hafalan klausul (pasangan nomor ↔ judul) |
@@ -51,8 +53,8 @@ Setelah itu, **Batch Baru → Bank soal** menampilkan ketiga pilihan. Bank yang 
 ### Langkah 3 — Jalankan SQL (urut)
 1. Buka `supabase/schema.sql`, pastikan email admin di bagian `insert into public.admins` sama dengan email dari Langkah 2.
 2. Supabase → **SQL Editor → New query** → tempel seluruh isi file → **Run**. Harus muncul "Success".
-3. Jalankan dengan cara yang sama, berurutan: `supabase/batch.sql` → `supabase/settings.sql` → `supabase/bank_mix50.sql` → `supabase/bank_klausul.sql`.
-4. Cek di **Table Editor**: ada tabel `attempts`, `batches`, `grading_config` (3 baris), `admins`.
+3. Jalankan dengan cara yang sama, berurutan: `supabase/batch.sql` → `supabase/settings.sql` → `supabase/bank_mix50.sql` → `supabase/bank_klausul.sql` → `supabase/training.sql`.
+4. Cek di **Table Editor**: ada tabel `attempts`, `batches`, `coparts`, `trainings`, `grading_config` (3 baris), `admins`.
 
 > Kunci jawaban, pembahasan, dan rubrik tersimpan di tabel `grading_config` dan hanya bisa dibaca akun admin. Peserta tidak dapat melihatnya lewat browser.
 
@@ -67,13 +69,13 @@ Pilih salah satu hosting statis (gratis): Vercel, Netlify, Cloudflare Pages, ata
 - Trainer: `https://domain-anda/admin.html`
 
 ### Langkah 6 — Uji sebelum dipakai
-1. Buat **dua batch uji**: satu dengan bank 100 soal, satu dengan bank 50 soal.
+1. Di tab **Copart & Training** buat Copart uji, lalu Training uji, lalu **dua batch uji** di training itu: satu dengan bank 100 soal, satu dengan bank 50 soal.
 2. Untuk masing-masing, buka tautan peserta, isi beberapa jawaban (termasuk esai pada bank 50 soal), tutup tab, buka lagi (harus lanjut dari posisi terakhir), lalu kirim.
-3. Di `admin.html`: peserta bank 100 soal langsung **Selesai** dengan nilai; peserta bank 50 soal berstatus **Perlu dinilai**. Buka detailnya, isi rubrik sampai lengkap, pastikan status berubah menjadi **Selesai**. Coba **Ekspor Excel**.
-4. Hapus data uji lewat tombol **Hapus peserta** dan hapus batch uji.
+3. Di `admin.html`: peserta bank 100 soal langsung **Selesai** dengan nilai; peserta bank 50 soal berstatus **Perlu dinilai**. Buka detailnya, isi rubrik sampai lengkap, pastikan status berubah menjadi **Selesai**. Coba **Ekspor Excel** dan **Ekspor Laporan** pada training uji.
+4. Hapus data uji lewat tombol **Hapus peserta**, lalu hapus batch, training, dan Copart uji (urutan terbalik).
 
 ## Memilih bank soal per batch
-1. Tab **Batch → Batch Baru** (atau **Pengaturan** pada kartu batch).
+1. Tab **Copart & Training** → buka Copart → **Batch Baru** pada training (atau **Pengaturan** pada kartu batch).
 2. Pilih **Bank soal**. Durasi otomatis menyesuaikan (90 menit untuk 100 soal, 75 menit untuk 50 soal) selama Anda belum mengubahnya.
 3. Bank soal tercatat di data peserta saat ia menekan **Mulai Ujian**. Mengganti bank pada batch yang sudah berjalan hanya berlaku untuk peserta berikutnya; peserta yang sudah mulai tetap memakai bank lamanya.
 4. Kartu batch dan judul halaman Peserta menampilkan bank soal yang dipakai.
@@ -134,18 +136,32 @@ Remidi memakai **batch dan baris peserta yang sama** — tidak perlu membuat bat
 Daftar peserta, kartu, rata-rata, kelulusan, nilai yang dilihat peserta, dan Excel memakai nilai akhir ini. Detail peserta & Excel tetap menampilkan nilai awal dan nilai remidi mentahnya.
 
 ## Duplikat batch
-Tombol **Duplikat** pada kartu batch membuka form berisi salinan pengaturan (bank soal, durasi, nilai lulus, aturan ujian, pengaturan klausul, aturan remidi). Ubah nama Copart bila perlu, lalu **Buat Salinan** — kode 6 angka baru dibuat otomatis. Peserta tidak ikut disalin; jadwal yang sudah lewat tidak disalin.
+Tombol **Duplikat** pada kartu batch membuka form berisi salinan pengaturan (bank soal, durasi, nilai lulus, aturan ujian, pengaturan klausul, aturan remidi). Ubah nama batch atau pilih training lain bila perlu, lalu **Buat Salinan** — kode 6 angka baru dibuat otomatis. Peserta tidak ikut disalin; jadwal yang sudah lewat tidak disalin.
 
 ## Data peserta lama
 Peserta yang dulu mengerjakan bank 50 soal sebelum sistem ini (sebelumnya tertulis **"Soal versi lama"**) kini dikenali otomatis sebagai bank 50 soal, berstatus **Perlu dinilai**, dan bisa dinilai dengan rubrik seperti biasa — setelah `bank_mix50.sql` dijalankan. Skor rubrik yang dulu sudah diisi tetap terbaca.
 
-## Batch per Copart
-1. Tab **Batch → Batch Baru**: isi nama Copart, bank soal, durasi, dan pengaturan lain; klik **Buat Batch**. Muncul kode 6 angka, misalnya `482915`.
-2. Bagikan **kode** atau **tautan** (tombol Salin tautan; peserta langsung masuk dengan kode terisi, misalnya `https://domain-anda/?kode=482915`).
-3. Peserta memasukkan kode → melihat nama Copart, jumlah soal, dan durasi → mengisi nama dan jabatan.
-4. **Tutup batch** menghentikan pendaftaran peserta baru. Peserta yang sudah mulai tetap bisa menyelesaikan ujiannya.
-5. Pilihan **Batch** di menu samping membatasi daftar, statistik, analisis, dan **Ekspor Excel** ke satu Copart.
-6. **Hapus batch** hanya menghapus kodenya. Data peserta tetap tersimpan dengan nama Copart-nya.
+## Copart, Training, dan Batch
+Urutan pembuatan: **Copart → Training → Batch**. Satu Copart dapat memiliki banyak Training; satu Training dapat memiliki banyak Batch (misalnya Pre-test dan Post-test).
+1. Tab **Copart & Training → Copart Baru**: isi nama Copart. Form **Training Baru** langsung terbuka.
+2. **Training**: nama training, tanggal mulai–selesai, nilai minimal lulus laporan, kode formulir (mis. `FM-SDD-001`), kolom tanda tangan (Dibuat / Disetujui / Diketahui), dan catatan. Kode formulir dan tanda tangan terisi otomatis dari training sebelumnya di Copart yang sama (Copart baru hanya mewarisi kolom *Dibuat*). Setelah disimpan, form **Batch Baru** langsung terbuka.
+3. **Batch**: pilih training, isi nama batch/test (bawaan `Test 1`, `Test 2`, …), bank soal, durasi, dan pengaturan lain; klik **Buat Batch**. Muncul kode 6 angka, misalnya `482915`.
+4. Bagikan **kode** atau **tautan** (tombol Salin tautan; peserta langsung masuk dengan kode terisi, misalnya `https://domain-anda/?kode=482915`). Peserta melihat nama Copart, training, batch, jumlah soal, dan durasi → mengisi nama dan jabatan.
+5. **Tutup batch** menghentikan pendaftaran peserta baru. Peserta yang sudah mulai tetap bisa menyelesaikan ujiannya.
+6. Pilihan **Filter** di menu samping dapat diisi satu Copart, satu Training, atau satu batch; berlaku untuk daftar, statistik, analisis, dan **Ekspor Excel**. Tombol **Lihat peserta** pada training langsung memakai filter training itu.
+7. Batch dapat dipindah ke training lain lewat **Pengaturan → Training**. Nama Copart pada batch selalu mengikuti training-nya.
+8. **Hapus batch** hanya menghapus kodenya; data peserta tetap tersimpan, tetapi nilainya tidak lagi masuk laporan training. Training hanya dapat dihapus bila tidak berisi batch, dan Copart hanya bila tidak berisi training.
+
+**Batch lama** (dibuat sebelum `training.sql`): dikelompokkan otomatis — satu Copart per nama Copart, dengan satu training bernama **"Training sebelumnya"** yang tanggalnya diambil dari tanggal batch. Ganti nama/tanggalnya lewat **Ubah**, atau pindahkan batch ke training lain.
+
+## Laporan rekap nilai per Training
+Tombol **Ekspor Laporan** pada training menghasilkan file *Rekap Penilaian Peserta - (training) (Copart) (tanggal).xlsx* dengan format seperti rekap penilaian manual:
+- Kepala: logo, nama training, nama Copart, tanggal training, kode formulir.
+- Tabel: No, Nama, Jabatan, **Nilai Test 1…n** (satu kolom per batch, urut tanggal batch dibuat), dan **Nilai Akhir** = rata-rata nilai test yang ada.
+- **Test yang diberikan** (nama tiap batch), **Kesimpulan** jumlah peserta lulus / tidak lulus (nilai akhir ≥ nilai minimal lulus training), catatan, dan kolom tanda tangan.
+- Peserta dicocokkan antarbatch berdasarkan **nama** (huruf besar/kecil dan spasi berlebih diabaikan); jabatan diambil dari pengerjaan terbaru. Pastikan peserta menulis nama yang sama di setiap batch.
+- Nilai test memakai nilai akhir batch (termasuk aturan remidi). Peserta yang belum selesai atau belum dinilai dikosongkan pada kolom test tersebut; aplikasi mengingatkan sebelum ekspor.
+- Nilai Akhir dan Kesimpulan berupa rumus Excel, sehingga tetap benar bila trainer mengoreksi nilai langsung di Excel.
 
 ## Pengaturan ujian per batch
 | Pengaturan | Keterangan |
@@ -176,7 +192,7 @@ Bank soal, durasi, pengacakan, dan wajib jawab semua disalin ke data peserta saa
 - Tombol **Ragu-ragu** pada tiap soal; ringkasan sebelum mengirim; pengingat saat sisa waktu 10, 5, dan 1 menit.
 
 ## Fitur konsol trainer
-- **Navigasi**: menu samping (Peserta, Batch, Analisis soal) dengan pilihan **Batch**. Setiap halaman punya alamat sendiri (mis. `admin.html#/peserta/<id>?batch=<id>`), sehingga Back/Forward, refresh, dan berbagi tautan tetap berfungsi.
+- **Navigasi**: menu samping (Peserta, Copart & Training, Analisis soal) dengan pilihan **Filter** (Copart, Training, atau batch). Setiap halaman punya alamat sendiri (mis. `admin.html#/peserta/<id>?batch=<id>`, `admin.html#/training/<id Copart>`), sehingga Back/Forward, refresh, dan berbagi tautan tetap berfungsi.
 - **Detail peserta**: breadcrumb, **Sebelumnya / Berikutnya**, pintasan `/` cari, `Esc` kembali, `←` `→` pindah peserta. Catatan trainer tersimpan otomatis.
 - **Peserta yang sedang mengerjakan**: **Tambah waktu** dan **Kirim paksa**.
 - **Analisis soal**: per bank soal (bila satu batch/filter berisi dua bank, ada tombol untuk berpindah bank). Persentase benar per area dan per soal (PG dan benar/salah), tingkat kesulitan, sebaran jawaban; untuk bank 50 soal ditambah **rata-rata skor tiap item rubrik**.
@@ -217,6 +233,8 @@ Simpan logo Anda sebagai `assets/logo.png` (PNG transparan, lebar ≥ 300 px). S
 | "Kunci jawaban bank 100 soal belum sesuai" | Jalankan `supabase/update_questions.sql` |
 | Pilihan bank 50 soal nonaktif / peringatan di tab Batch | Jalankan `supabase/bank_mix50.sql` |
 | Pilihan bank hafalan klausul nonaktif | Jalankan `supabase/bank_klausul.sql` |
+| Peringatan "Copart & Training belum aktif" | Jalankan `supabase/training.sql` (setelah `settings.sql`) |
+| "Gagal menyimpan … p_training" saat membuat batch | `settings.sql` dijalankan ulang setelah `training.sql`; jalankan ulang `training.sql` |
 | Peserta bank klausul melihat "Soal belum tersedia" | `settings.sql` versi baru belum dijalankan; jalankan, lalu hapus entri peserta itu dan minta mulai ulang |
 | "Gagal membuka remidi … jalankan ulang supabase/settings.sql" | Kolom remidi belum ada; jalankan ulang `settings.sql` |
 | Peserta bank 50 soal tidak melihat nilai setelah dinilai | Jalankan ulang `supabase/settings.sql` (fungsi `my_result` versi baru), pastikan **Tampilkan nilai** aktif |

@@ -27,7 +27,7 @@ const RULES = {
   raw: ["Nilai remidi terakhir", "Nilai remidi apa adanya, walaupun lebih rendah dari nilai sebelumnya."],
 };
 
-let sb, CFGS = {}, rows = [], batches = [], cur = null, poll, bf = "all", fsv = "all", hasSettings = true, editId = null, an = { sort: "no", area: "all", bank: null };
+let sb, CFGS = {}, rows = [], batches = [], coparts = [], trainings = [], cur = null, poll, bf = "all", fsv = "all", hasSettings = true, hasTraining = true, editId = null, an = { sort: "no", area: "all", bank: null };
 let route = { p: "list", id: null }, listY = 0, gradeT;
 
 async function init() {
@@ -51,6 +51,7 @@ async function enter(email) {
   if (!CFGS[B100.version]) { await sb.auth.signOut(); view("vLogin"); $("#lErr").textContent = "Kunci jawaban bank 100 soal belum sesuai. Jalankan supabase/update_questions.sql di Supabase → SQL Editor, lalu login ulang."; return; }
   const probe = await sb.from("batches").select("settings,open_from,open_until").limit(1);
   hasSettings = !probe.error;
+  hasTraining = !(await sb.from("trainings").select("id").limit(1)).error;
   $("#me").textContent = email;
   view("vApp"); await load(); render(); poll = setInterval(load, 10000);
 }
@@ -60,9 +61,9 @@ $("#qs").oninput = $("#sort").onchange = () => renderList();
 $("#fs").onclick = e => { const b = e.target.closest("button"); if (!b) return; fsv = b.dataset.v; $$("#fs button").forEach(x => x.classList.toggle("on", x === b)); renderList(); };
 $("#fb").onchange = e => setBf(e.target.value);
 
-// ---- navigasi berbasis URL: #/peserta, #/peserta/<id>, #/batch, #/analisis (+ ?batch=<id>) ----
+// ---- navigasi berbasis URL: #/peserta, #/peserta/<id>, #/training, #/training/<id copart>, #/analisis (+ ?batch=<filter>) ----
 // Tombol Back/Forward browser, refresh, dan tautan langsung ke halaman/peserta tetap berfungsi.
-const PATH = { list: "peserta", batch: "batch", anal: "analisis" }, PAGE = { peserta: "list", batch: "batch", analisis: "anal" };
+const PATH = { list: "peserta", batch: "training", anal: "analisis" }, PAGE = { peserta: "list", training: "batch", batch: "batch", analisis: "anal" };
 const href = (p, id) => "#/" + PATH[p] + (id ? "/" + id : "") + (bf !== "all" ? "?batch=" + bf : "");
 function parseHash() {
   const [path, qs] = location.hash.replace(/^#\/?/, "").split("?"), [pg, id] = path.split("/");
@@ -71,14 +72,14 @@ function parseHash() {
 const nav = (p, id) => { location.hash = href(p, id); };
 window.addEventListener("hashchange", render);
 function render() {
-  const r = parseHash(), fromList = route.p === "list" && !route.id && !$("#vList").hidden;
+  const r = parseHash(), fromList = route.p === "list" && !route.id && !$("#vList").hidden, det = r.p === "list" && r.id;
   if (r.b !== bf) { bf = [...$("#fb").options].some(o => o.value === r.b) ? r.b : "all"; $("#fb").value = bf; setXlsLabel(); }
-  if (r.id && fromList) listY = window.scrollY;                       // ingat posisi daftar
-  const backToList = route.id && !r.id && r.p === "list";
+  if (det && fromList) listY = window.scrollY;                        // ingat posisi daftar
+  const backToList = route.p === "list" && route.id && !r.id && r.p === "list";
   route = { p: r.p, id: r.id };
   $$(".sn-i").forEach(a => { const on = a.dataset.p === r.p; a.classList.toggle("on", on); on ? a.setAttribute("aria-current", "page") : a.removeAttribute("aria-current"); a.href = href(a.dataset.p); });
-  document.title = (r.id ? "Detail peserta" : { list: "Peserta", batch: "Batch", anal: "Analisis soal" }[r.p]) + " — Trainer Console";
-  if (r.id) { $("#vList").hidden = true; $("#vDet").hidden = false; navCounts(); openDet(r.id); return; }
+  document.title = (det ? "Detail peserta" : { list: "Peserta", batch: "Copart & Training", anal: "Analisis soal" }[r.p]) + " — Trainer Console";
+  if (det) { $("#vList").hidden = true; $("#vDet").hidden = false; navCounts(); openDet(r.id); return; }
   cur = null; $("#vDet").hidden = true; $("#vList").hidden = false;
   $("#pgList").hidden = r.p !== "list"; $("#pgBatch").hidden = r.p !== "batch"; $("#pgAnal").hidden = r.p !== "anal";
   paint();
@@ -86,7 +87,7 @@ function render() {
 }
 function paint() {                                                    // gambar ulang halaman yang tampil tanpa mengubah posisi scroll
   navCounts();
-  if (route.id) return;
+  if (route.p === "list" && route.id) return;
   if (route.p === "list") renderList(); else if (route.p === "batch") renderBatches(); else renderAnal();
 }
 function setBf(v) {
@@ -98,25 +99,45 @@ function setBf(v) {
 function navCounts() {
   const base = batchRows(), live = base.filter(r => r.status === "in_progress").length, todo = base.filter(needsGrading).length;
   $("#nList").innerHTML = base.length ? base.length + (live ? ` <i title="${live} sedang mengerjakan">${live} aktif</i>` : "") + (todo ? ` <i title="${todo} menunggu penilaian manual">${todo} perlu dinilai</i>` : "") : "";
-  $("#nBatch").textContent = batches.length || "";
-  const b = bOf(bf), ctx = bf === "all" ? "Semua batch" : bf === "none" ? "Tanpa batch (data lama)" : b ? `${b.copart} · kode ${b.code} · ${bankOfBatch(b).short}` : "";
+  $("#nBatch").textContent = hasTraining ? trainings.length || "" : batches.length || "";
+  const b = bOf(bf), ctx = b ? `${bPath(b)} · kode ${b.code} · ${bankOfBatch(b).short}` : fLabel(bf);
   $("#ctxList").textContent = ctx + " · diperbarui otomatis";
   $("#ctxAnal").textContent = ctx + " · dari peserta yang sudah mengirim jawaban";
 }
 // pintasan keyboard: / cari, Esc kembali ke daftar, ← → peserta sebelumnya/berikutnya
 document.addEventListener("keydown", e => {
-  if (!$("#mBatch").hidden || !$("#mRem").hidden || $("#vApp").hidden) return;
+  if ([...$$(".modal")].some(m => !m.hidden) || $("#vApp").hidden) return;
   const typing = /^(INPUT|TEXTAREA|SELECT)$/.test(document.activeElement.tagName);
   if (e.key === "/" && !typing && route.p === "list" && !route.id) { e.preventDefault(); $("#qs").focus(); }
-  if (!route.id || typing || e.ctrlKey || e.metaKey || e.altKey) return;
+  if (route.p !== "list" || !route.id || typing || e.ctrlKey || e.metaKey || e.altKey) return;
   if (e.key === "Escape") nav("list");
   if (e.key === "ArrowLeft" && $("#bPrev")) $("#bPrev").click();
   if (e.key === "ArrowRight" && $("#bNext")) $("#bNext").click();
 });
-const batchRows = () => bf === "all" ? rows : bf === "none" ? rows.filter(r => !r.batch_id) : rows.filter(r => r.batch_id === bf);
+// Filter peserta: "all", "none" (tanpa batch), "c:<id copart>", "t:<id training>", atau id batch
 const bOf = id => batches.find(b => b.id === id);
+const tOf = id => trainings.find(t => t.id === id);
+const cOf = id => coparts.find(c => c.id === id);
 const bcode = id => (bOf(id) || {}).code || "";
-const setXlsLabel = () => $("#bXls").textContent = bf === "all" ? "Ekspor Excel" : "Ekspor Excel (batch ini)";
+const bName = b => b.name || b.note || "Batch " + b.code;
+const byDate = (x, y) => new Date(x.created_at) - new Date(y.created_at);
+const tBatches = t => batches.filter(b => b.training_id === t.id).sort(byDate);           // urutan = Test 1, 2, 3 di laporan
+const cTrainings = c => trainings.filter(t => t.copart_id === c.id).sort((x, y) => (y.date_from || "").localeCompare(x.date_from || "") || byDate(y, x));
+const bPath = b => { const t = tOf(b.training_id); return t ? `${b.copart} · ${t.name} · ${bName(b)}` : `${b.copart}${b.name ? " · " + b.name : ""}`; };
+function fIds(v) {                                   // id batch yang termasuk filter v (null = semua)
+  if (v.startsWith("t:")) return new Set(batches.filter(b => b.training_id === v.slice(2)).map(b => b.id));
+  if (v.startsWith("c:")) { const ts = new Set(trainings.filter(t => t.copart_id === v.slice(2)).map(t => t.id)); return new Set(batches.filter(b => ts.has(b.training_id)).map(b => b.id)); }
+  return null;
+}
+function fLabel(v) {
+  if (v === "all") return "Semua batch";
+  if (v === "none") return "Tanpa batch (data lama)";
+  if (v.startsWith("c:")) return (cOf(v.slice(2)) || {}).name || "";
+  if (v.startsWith("t:")) { const t = tOf(v.slice(2)); return t ? `${(cOf(t.copart_id) || {}).name} · ${t.name}` : ""; }
+  const b = bOf(v); return b ? bPath(b) : "";
+}
+const batchRows = () => { if (bf === "all") return rows; if (bf === "none") return rows.filter(r => !r.batch_id); const s = fIds(bf); return s ? rows.filter(r => s.has(r.batch_id)) : rows.filter(r => r.batch_id === bf); };
+const setXlsLabel = () => $("#bXls").textContent = bf === "all" ? "Ekspor Excel" : "Ekspor Excel (filter ini)";
 const pubUrl = code => new URL("./?kode=" + code, location.href).href;
 const copy = async (t, btn) => {
   try { await navigator.clipboard.writeText(t); } catch { prompt("Salin teks berikut:", t); return; }
@@ -124,11 +145,13 @@ const copy = async (t, btn) => {
 };
 
 async function load() {
-  const [a, b] = await Promise.all([
+  const [a, b, c, t] = await Promise.all([
     sb.from("attempts").select("*").order("started_at", { ascending: false }),
-    sb.from("batches").select("*").order("created_at", { ascending: false })]);
+    sb.from("batches").select("*").order("created_at", { ascending: false }),
+    hasTraining ? sb.from("coparts").select("*").order("name") : { data: [] },
+    hasTraining ? sb.from("trainings").select("*").order("created_at", { ascending: false }) : { data: [] }]);
   if (a.error) return $("#upd").textContent = "Gagal memuat: " + a.error.message;
-  rows = a.data; batches = b.data || [];
+  rows = a.data; batches = b.data || []; coparts = c.data || []; trainings = t.data || [];
   $("#upd").textContent = b.error ? "Jalankan supabase/batch.sql terlebih dahulu" : "Diperbarui " + new Date().toLocaleTimeString("id-ID", { hour: "2-digit", minute: "2-digit" });
   renderBatchFilter(); paint();
   if (cur) {
@@ -137,7 +160,13 @@ async function load() {
   }
 }
 function renderBatchFilter() {
-  const v = bf, opts = `<option value="all">Semua batch</option>` + batches.map(b => `<option value="${b.id}">${esc(b.copart)} · ${esc(b.code)}</option>`).join("") + (rows.some(r => !r.batch_id) ? `<option value="none">Tanpa batch (data lama)</option>` : "");
+  // dikelompokkan per Copart: semua di Copart → tiap Training → batch-batch di dalamnya
+  const ind = " ", opt = (v, t) => `<option value="${v}">${esc(t)}</option>`, loose = batches.filter(b => !tOf(b.training_id));
+  const v = bf, opts = opt("all", "Semua batch") + coparts.map(c => {
+    const ts = cTrainings(c); if (!ts.length) return "";
+    return `<optgroup label="${esc(c.name)}">${opt("c:" + c.id, "Semua di " + c.name)}${ts.map(t => opt("t:" + t.id, ind + t.name) + tBatches(t).map(b => opt(b.id, `${ind}${ind}${bName(b)} · ${b.code}`)).join("")).join("")}</optgroup>`;
+  }).join("") + (loose.length ? `<optgroup label="${hasTraining ? "Tanpa training" : "Batch"}">${loose.map(b => opt(b.id, `${b.copart} · ${b.code}`)).join("")}</optgroup>` : "")
+    + (rows.some(r => !r.batch_id) ? opt("none", "Tanpa batch (data lama)") : "");
   const sel = $("#fb"); sel.innerHTML = opts; sel.value = [...sel.options].some(o => o.value === v) ? v : "all";
   bf = sel.value; setXlsLabel();
 }
@@ -277,32 +306,130 @@ function bState(b) {
   if (b.open_until && now > new Date(b.open_until).getTime()) return ["Jadwal berakhir", "b-mut"];
   return ["Dibuka", "b-ok"];
 }
+// ---- Copart → Training → Batch ----
+// #/training: daftar Copart (+ batch yang belum masuk training) · #/training/<id copart>: Training milik Copart beserta batch-batch-nya
+const pKey = s => String(s || "").trim().replace(/\s+/g, " ").toUpperCase();
+// Peserta satu training: dicocokkan antarbatch berdasarkan nama (huruf besar/kecil & spasi diabaikan).
+// scores[i] = nilai akhir di batch ke-i (tertinggi bila terdaftar lebih dari sekali); final = rata-rata nilai yang ada.
+function people(bs) {
+  const ids = bs.map(b => b.id), m = new Map();
+  rows.filter(r => ids.includes(r.batch_id)).sort((x, y) => new Date(x.started_at) - new Date(y.started_at)).forEach(a => {
+    const k = pKey(a.name), p = m.get(k) || { name: k, job: "", scores: ids.map(() => null), pending: 0 };
+    m.set(k, p); p.job = a.job_title;
+    const i = ids.indexOf(a.batch_id);
+    if (isFinal(a)) p.scores[i] = Math.max(p.scores[i] ?? -1, calc(a).total); else p.pending++;
+  });
+  return [...m.values()].map(p => {
+    const v = p.scores.filter(x => x !== null);
+    p.final = v.length ? Math.round(v.reduce((s, x) => s + x, 0) / v.length * 10) / 10 : null;
+    return p;
+  }).sort((x, y) => x.name.localeCompare(y.name, "id"));
+}
+const MON = ["Januari", "Februari", "Maret", "April", "Mei", "Juni", "Juli", "Agustus", "September", "Oktober", "November", "Desember"];
+function fmtRange(t) {                               // "1 - 3 Juli 2026", "30 Juni - 2 Juli 2026"
+  const p = d => { const [y, m, x] = d.split("-").map(Number); return { y, m: MON[m - 1], d: x }; };
+  if (!t.date_from && !t.date_to) return "";
+  const a = p(t.date_from || t.date_to), b = p(t.date_to || t.date_from);
+  if (a.y !== b.y) return `${a.d} ${a.m} ${a.y} - ${b.d} ${b.m} ${b.y}`;
+  if (a.m !== b.m) return `${a.d} ${a.m} - ${b.d} ${b.m} ${b.y}`;
+  return a.d === b.d ? `${a.d} ${a.m} ${a.y}` : `${a.d} - ${b.d} ${a.m} ${a.y}`;
+}
+const emptyCard = (title, text, btn) => `<div class="card empty"><h3 style="margin:0 0 6px;color:var(--ink)">${title}</h3><p style="margin:0 0 16px">${text}</p>${btn}</div>`;
+function batchCard(b, title, meta) {
+  const p = rows.filter(r => r.batch_id === b.id), sub = p.filter(scored), cs = p.filter(isFinal).map(a => calc(a)), todo = p.filter(needsGrading).length;
+  const avg = cs.length ? (cs.reduce((t, c) => t + c.total, 0) / cs.length).toFixed(1) : "—", s = b.settings || {}, [stT, stC] = bState(b), bk = bankOfBatch(b);
+  const failN = p.filter(failed).length, remN = p.filter(r => r.remedial || r.status === "remedial").length;
+  const spec = [bk.label, `${b.duration_minutes || bk.minutes} menit`];
+  if (hasSettings) {
+    spec.push(`lulus ≥ ${num(s.pass_mark) ?? 70}`);
+    Object.entries(OPT_LABEL).forEach(([k, t]) => s[k] && !(bk.kind === "clause" && MC_ONLY.includes(k)) && spec.push(t.toLowerCase()));
+  }
+  const sched = (hasSettings && (b.open_from || b.open_until) ? `<div class="specs">Jadwal: ${b.open_from ? fmtD(b.open_from) : "…"} – ${b.open_until ? fmtD(b.open_until) : "…"}</div>` : "")
+    + (bk.kind === "clause" ? `<div class="specs">${esc(clSpec(s))}</div>` : "");
+  return `<div class="bc ${b.is_open ? "" : "off"}">
+    <div class="bc-top"><div><h3>${esc(title)}</h3><p>${meta}</p></div><span class="badge ${stC}">${stT}</span></div>
+    <div class="bc-code"><span class="code">${esc(b.code)}</span><div class="sp"></div><button class="btn ghost sm" data-a="code" data-id="${b.id}">Salin kode</button><button class="btn ghost sm" data-a="link" data-id="${b.id}">Salin tautan</button></div>
+    <div class="specs">${esc(spec.join(" · "))}</div>${sched}
+    <div class="bc-stats"><div><b>${p.length}</b><span>Peserta</span></div><div><b>${sub.length}</b><span>${todo ? `<span class="wtx">${todo} perlu dinilai</span>` : "Sudah kirim"}</span></div><div><b>${avg}</b><span>Rata-rata</span></div></div>
+    <div class="bc-act"><button class="btn soft sm" data-a="view" data-id="${b.id}">Lihat peserta</button><button class="btn ghost sm" data-a="edit" data-id="${b.id}">Pengaturan</button>
+      <button class="btn ghost sm" data-a="toggle" data-id="${b.id}">${b.is_open ? "Tutup" : "Buka"}</button>
+      <button class="btn ghost sm" data-a="dup" data-id="${b.id}" title="Buat batch baru dengan pengaturan yang sama">Duplikat</button>
+      ${failN || remN ? `<button class="btn ghost sm" data-a="rem" data-id="${b.id}" title="Peserta di bawah KKM mengulang di batch ini">Remidi${failN ? ` (${failN})` : ""}</button>` : ""}<div class="sp"></div>
+      <button class="btn danger sm" data-a="del" data-id="${b.id}">Hapus</button></div></div>`;
+}
 function renderBatches() {
   $("#bWarn").innerHTML = (hasSettings ? "" : `<div class="alert"><b>Pengaturan ujian belum aktif.</b> Jalankan <code>supabase/settings.sql</code> di Supabase → SQL Editor untuk mengaktifkan pilihan bank soal, jadwal, pengacakan, nilai lulus, dan tampilkan nilai. Setelah itu muat ulang halaman ini.</div>`)
-    + (hasSettings && BANKS[MIX] && !CFGS[MIX] ? `<div class="alert"><b>Bank 50 soal campuran belum aktif.</b> Jalankan <code>supabase/bank_mix50.sql</code> di Supabase → SQL Editor, lalu muat ulang halaman ini.</div>` : "");
-  $("#bt").innerHTML = batches.length ? batches.map(b => {
-    const p = rows.filter(r => r.batch_id === b.id), sub = p.filter(scored), cs = p.filter(isFinal).map(a => calc(a)), todo = p.filter(needsGrading).length;
-    const avg = cs.length ? (cs.reduce((t, c) => t + c.total, 0) / cs.length).toFixed(1) : "—", s = b.settings || {}, [stT, stC] = bState(b), bk = bankOfBatch(b);
-    const failN = p.filter(failed).length, remN = p.filter(r => r.remedial || r.status === "remedial").length;
-    const spec = [bk.label, `${b.duration_minutes || bk.minutes} menit`];
-    if (hasSettings) {
-      spec.push(`lulus ≥ ${num(s.pass_mark) ?? 70}`);
-      Object.entries(OPT_LABEL).forEach(([k, t]) => s[k] && !(bk.kind === "clause" && MC_ONLY.includes(k)) && spec.push(t.toLowerCase()));
-    }
-    const sched = (hasSettings && (b.open_from || b.open_until) ? `<div class="specs">Jadwal: ${b.open_from ? fmtD(b.open_from) : "…"} – ${b.open_until ? fmtD(b.open_until) : "…"}</div>` : "")
-      + (bk.kind === "clause" ? `<div class="specs">${esc(clSpec(s))}</div>` : "");
-    return `<div class="bc ${b.is_open ? "" : "off"}">
-      <div class="bc-top"><div><h3>${esc(b.copart)}</h3><p>${b.note ? esc(b.note) : "Dibuat " + fmtD(b.created_at)}</p></div><span class="badge ${stC}">${stT}</span></div>
-      <div class="bc-code"><span class="code">${esc(b.code)}</span><div class="sp"></div><button class="btn ghost sm" data-a="code" data-id="${b.id}">Salin kode</button><button class="btn ghost sm" data-a="link" data-id="${b.id}">Salin tautan</button></div>
-      <div class="specs">${esc(spec.join(" · "))}</div>${sched}
-      <div class="bc-stats"><div><b>${p.length}</b><span>Peserta</span></div><div><b>${sub.length}</b><span>${todo ? `<span class="wtx">${todo} perlu dinilai</span>` : "Sudah kirim"}</span></div><div><b>${avg}</b><span>Rata-rata</span></div></div>
-      <div class="bc-act"><button class="btn soft sm" data-a="view" data-id="${b.id}">Lihat peserta</button><button class="btn ghost sm" data-a="edit" data-id="${b.id}">Pengaturan</button>
-        <button class="btn ghost sm" data-a="toggle" data-id="${b.id}">${b.is_open ? "Tutup" : "Buka"}</button>
-        <button class="btn ghost sm" data-a="dup" data-id="${b.id}" title="Buat batch baru dengan pengaturan yang sama">Duplikat</button>
-        ${failN || remN ? `<button class="btn ghost sm" data-a="rem" data-id="${b.id}" title="Peserta di bawah KKM mengulang di batch ini">Remidi${failN ? ` (${failN})` : ""}</button>` : ""}<div class="sp"></div>
-        <button class="btn danger sm" data-a="del" data-id="${b.id}">Hapus</button></div></div>`;
-  }).join("") : `<div class="card empty" style="grid-column:1/-1"><h3 style="margin:0 0 6px;color:var(--ink)">Belum ada batch</h3><p style="margin:0 0 16px">Buat batch untuk mendapatkan kode 6 angka yang dibagikan ke peserta.</p><button class="btn" data-a="new">Buat Batch</button></div>`;
-  $$("#bt button[data-a]").forEach(btn => btn.onclick = () => batchAct(btn.dataset.a, bOf(btn.dataset.id), btn));
+    + (hasSettings && BANKS[MIX] && !CFGS[MIX] ? `<div class="alert"><b>Bank 50 soal campuran belum aktif.</b> Jalankan <code>supabase/bank_mix50.sql</code> di Supabase → SQL Editor, lalu muat ulang halaman ini.</div>` : "")
+    + (hasTraining ? "" : `<div class="alert"><b>Copart &amp; Training belum aktif.</b> Jalankan <code>supabase/training.sql</code> di Supabase → SQL Editor (setelah settings.sql), lalu muat ulang halaman ini. Sementara itu batch dibuat seperti sebelumnya.</div>`);
+  const c = hasTraining && route.id && cOf(route.id);
+  if (c) return renderCopart(c);
+  const loose = batches.filter(b => !tOf(b.training_id));
+  $("#bHead").innerHTML = `<div class="phead"><div><h1>Copart &amp; Training</h1><p class="mut">Buat Copart, lalu Training di dalamnya, lalu Batch (test) di dalam Training. Laporan rekap nilai diekspor per Training.</p></div>
+    <div class="ctl">${hasTraining ? `<button class="btn" data-x="cnew">Copart Baru</button>` : `<button class="btn" data-a="new">Batch Baru</button>`}</div></div>`;
+  let h = hasTraining && route.id ? `<div class="alert">Copart tidak ditemukan; mungkin sudah dihapus. <a href="${href("batch")}">Lihat semua Copart</a></div>` : "";
+  if (hasTraining) h += coparts.length ? `<div class="bgrid">${coparts.map(c => {
+    const ts = cTrainings(c), bs = batches.filter(b => ts.some(t => t.id === b.training_id)), last = ts[0];
+    return `<div class="bc"><div class="bc-top"><div><h3><a class="rowlink" href="${href("batch", c.id)}">${esc(c.name)}</a></h3><p>${c.note ? esc(c.note) : "Dibuat " + fmtD(c.created_at)}</p></div></div>
+      <div class="specs" style="margin-top:10px">${last ? "Training terbaru: " + esc(last.name) + (fmtRange(last) ? " · " + esc(fmtRange(last)) : "") : "Belum ada training"}</div>
+      <div class="bc-stats"><div><b>${ts.length}</b><span>Training</span></div><div><b>${bs.length}</b><span>Batch</span></div><div><b>${people(bs).length}</b><span>Peserta</span></div></div>
+      <div class="bc-act"><a class="btn soft sm" href="${href("batch", c.id)}">Buka</a><button class="btn ghost sm" data-x="tnew" data-id="${c.id}">Training Baru</button><button class="btn ghost sm" data-x="cedit" data-id="${c.id}">Ubah</button><div class="sp"></div><button class="btn danger sm" data-x="cdel" data-id="${c.id}">Hapus</button></div></div>`;
+  }).join("")}</div>` : emptyCard("Belum ada Copart", "Mulai dengan membuat Copart, lalu Training, lalu Batch (test) untuk mendapatkan kode 6 angka.", `<button class="btn" data-x="cnew">Buat Copart</button>`);
+  if (loose.length) h += (hasTraining ? `<div class="sec-h">Batch tanpa training (${loose.length})</div><p class="small mut" style="margin:-6px 2px 12px">Pilih Training lewat tombol <b>Pengaturan</b> agar batch ikut dalam laporan Training.</p>` : "")
+    + `<div class="bgrid">${loose.map(b => batchCard(b, b.copart, b.note ? esc(b.note) : "Dibuat " + fmtD(b.created_at))).join("")}</div>`;
+  else if (!hasTraining) h += emptyCard("Belum ada batch", "Buat batch untuk mendapatkan kode 6 angka yang dibagikan ke peserta.", `<button class="btn" data-a="new">Buat Batch</button>`);
+  $("#bt").innerHTML = h;
+  bindBatchPage();
+}
+function renderCopart(c) {
+  const ts = cTrainings(c), nb = batches.filter(b => ts.some(t => t.id === b.training_id)).length;
+  $("#bHead").innerHTML = `<div class="crumbs"><a href="${href("batch")}">Copart &amp; Training</a><span>/</span><span>${esc(c.name)}</span></div>
+    <div class="phead" style="margin-top:8px"><div><h1>${esc(c.name)}</h1><p class="mut">${c.note ? esc(c.note) + " · " : ""}${ts.length} training · ${nb} batch</p></div>
+    <div class="ctl"><button class="btn ghost" data-x="cedit" data-id="${c.id}">Ubah Copart</button><button class="btn" data-x="tnew" data-id="${c.id}">Training Baru</button></div></div>`;
+  $("#bt").innerHTML = ts.length ? ts.map(t => {
+    const bs = tBatches(t), ppl = people(bs), fin = ppl.filter(x => x.final !== null), pass = fin.filter(x => x.final >= t.pass_mark).length, wait = ppl.filter(x => x.pending).length;
+    return `<section class="card trn"><div class="trn-h"><div><h2>${esc(t.name)}</h2><p>${[fmtRange(t), "lulus ≥ " + t.pass_mark, t.form_code].filter(Boolean).map(esc).join(" · ")}</p></div>
+      <div class="ctl"><button class="btn sm" data-x="rep" data-id="${t.id}" ${bs.length ? "" : "disabled"} title="Rekap nilai per peserta dengan kolom Nilai Test tiap batch">Ekspor Laporan</button><button class="btn soft sm" data-x="tview" data-id="${t.id}">Lihat peserta</button>
+        <button class="btn ghost sm" data-x="tedit" data-id="${t.id}">Ubah</button><button class="btn danger sm" data-x="tdel" data-id="${t.id}">Hapus</button></div></div>
+      <div class="trn-s"><span><b>${bs.length}</b>batch</span><span><b>${ppl.length}</b>peserta</span><span><b>${pass}</b>lulus</span><span><b>${fin.length - pass}</b>belum lulus</span>${wait ? `<span class="wtx"><b>${wait}</b>belum selesai / belum dinilai</span>` : ""}</div>
+      ${bs.length ? `<div class="bgrid">${bs.map((b, i) => batchCard(b, bName(b), `Test ${i + 1}${b.name && b.note ? " · " + esc(b.note) : ""}`)).join("")}</div><div style="margin-top:12px"><button class="btn ghost sm" data-x="bnew" data-id="${t.id}">+ Batch Baru</button></div>`
+        : `<div class="trn-e"><p>Belum ada batch di training ini. Buat batch (test) untuk mendapatkan kode 6 angka.</p><button class="btn" data-x="bnew" data-id="${t.id}">Batch Baru</button></div>`}
+    </section>`;
+  }).join("") : emptyCard("Belum ada training", `Buat training untuk ${esc(c.name)}, lalu tambahkan batch (test) di dalamnya.`, `<button class="btn" data-x="tnew" data-id="${c.id}">Buat Training</button>`);
+  bindBatchPage();
+}
+function bindBatchPage() {
+  $$("#pgBatch button[data-a]").forEach(btn => btn.onclick = () => batchAct(btn.dataset.a, bOf(btn.dataset.id), btn));
+  $$("#pgBatch button[data-x]").forEach(btn => btn.onclick = () => trnAct(btn.dataset.x, btn.dataset.id, btn));
+}
+function viewRows(v) { bf = v; $("#fb").value = v; setXlsLabel(); an.bank = null; nav("list"); }
+async function trnAct(x, id, btn) {
+  if (x === "cnew") return openCop();
+  if (x === "cedit") return openCop(cOf(id));
+  if (x === "tnew") return openTrn(null, id);
+  if (x === "tedit") return openTrn(tOf(id));
+  if (x === "bnew") return openBatch(null, false, id);
+  if (x === "tview") return viewRows("t:" + id);
+  if (x === "rep") {
+    const t = tOf(id), wait = people(tBatches(t)).filter(p => p.pending).length;
+    if (wait && !confirm(`${wait} peserta belum selesai mengerjakan atau belum dinilai. Nilai test yang belum final dikosongkan di laporan.\nLanjutkan ekspor?`)) return;
+    btn.disabled = true; btn.textContent = "Menyiapkan…";
+    try { await exportReport(t); } catch (e) { alert("Gagal ekspor: " + e.message); }
+    btn.disabled = false; btn.textContent = "Ekspor Laporan"; return;
+  }
+  if (x === "cdel") {
+    const c = cOf(id), n = cTrainings(c).length;
+    if (n) return alert(`Copart "${c.name}" masih memiliki ${n} training. Hapus training-nya terlebih dahulu.`);
+    if (!confirm(`Hapus Copart "${c.name}"?`)) return;
+    const { error } = await sb.from("coparts").delete().eq("id", id); if (error) return alert("Gagal: " + error.message);
+    if (route.id === id) nav("batch"); return load();
+  }
+  if (x === "tdel") {
+    const t = tOf(id), n = tBatches(t).length;
+    if (n) return alert(`Training "${t.name}" masih memiliki ${n} batch. Pindahkan batch ke training lain lewat Pengaturan, atau hapus batch-nya terlebih dahulu.`);
+    if (!confirm(`Hapus training "${t.name}"?`)) return;
+    const { error } = await sb.from("trainings").delete().eq("id", id); if (error) return alert("Gagal: " + error.message);
+    if (bf === "t:" + id) bf = "all"; return load();
+  }
 }
 async function batchAct(a, b, btn) {
   if (a === "new") return openBatch();
@@ -311,10 +438,10 @@ async function batchAct(a, b, btn) {
   if (a === "edit") return openBatch(b);
   if (a === "dup") return openBatch(b, true);
   if (a === "rem") return openRem(b);
-  if (a === "view") { bf = b.id; $("#fb").value = b.id; setXlsLabel(); an.bank = null; return nav("list"); }
+  if (a === "view") return viewRows(b.id);
   if (a === "toggle") { const { error } = await sb.from("batches").update({ is_open: !b.is_open }).eq("id", b.id); if (error) return alert("Gagal: " + error.message); return load(); }
   if (a === "del") {
-    if (!confirm(`Hapus batch "${b.copart}" (kode ${b.code})?\nData peserta tetap tersimpan, tetapi kode ini tidak bisa dipakai lagi.`)) return;
+    if (!confirm(`Hapus batch "${bPath(b)}" (kode ${b.code})?\nData peserta tetap tersimpan, tetapi kode ini tidak bisa dipakai lagi dan nilainya tidak lagi masuk laporan Training.`)) return;
     const { error } = await sb.from("batches").delete().eq("id", b.id); if (error) return alert("Gagal: " + error.message); if (bf === b.id) bf = "all"; return load();
   }
 }
@@ -398,16 +525,25 @@ const clSpec = s => {                                // ringkasan pengaturan kla
   return [sc, pt(1, "Jenis 1"), pt(2, "Jenis 2"), cl.p1.on && cl.p2.on && cl.seq ? "berurutan" : ""].filter(Boolean).join(" · ");
 };
 
-function openBatch(b, dup) {
+function openBatch(b, dup, tid) {
   editId = b && !dup ? b.id : null;
+  // batch berada di dalam Training; batch lama tanpa training dapat dipindahkan lewat pilihan ini
+  const trn = b ? b.training_id || "" : tid || "", t0 = tOf(trn);
+  $("#bnTrnW").hidden = !hasTraining;
+  $("#bnTrn").innerHTML = (tOf(trn) ? "" : `<option value="">— Pilih training —</option>`) + coparts.map(c => { const ts = cTrainings(c); return ts.length ? `<optgroup label="${esc(c.name)}">${ts.map(t => `<option value="${t.id}">${esc(t.name)}${fmtRange(t) ? " · " + esc(fmtRange(t)) : ""}</option>`).join("")}</optgroup>` : ""; }).join("");
+  $("#bnTrn").value = trn;
+  $("#bnNameL").textContent = hasTraining ? "Nama batch / test" : "Nama Copart";
+  $("#bnName").placeholder = hasTraining ? "Post-test ISO 9001" : "PT Sinar Jaya Abadi";
   const s = Object.assign({}, DEF, b ? Object.assign({ shuffle_opt: false }, b.settings || {}) : {}), bk = b ? bankOfBatch(b) : B100;
   const keepSched = b && (!dup || !b.open_until || new Date(b.open_until) > new Date());   // duplikat: jadwal yang sudah lewat tidak disalin
   $("#mbTitle").textContent = dup ? "Duplikat Batch" : b ? "Pengaturan Batch" : "Batch Baru";
-  $("#mbSub").textContent = dup ? `Salinan pengaturan dari ${b.copart} · kode ${b.code}. Kode baru dibuat otomatis; peserta tidak ikut disalin.` : b ? `${b.copart} · kode ${b.code}` : "Kode 6 angka dibuat otomatis.";
+  $("#mbSub").textContent = dup ? `Salinan pengaturan dari ${bPath(b)} · kode ${b.code}. Kode baru dibuat otomatis; peserta tidak ikut disalin.` : b ? `${bPath(b)} · kode ${b.code}`
+    : (t0 ? `${(cOf(t0.copart_id) || {}).name} · ${t0.name} · ` : "") + "Kode 6 angka dibuat otomatis.";
   const need = x => x.version === MIX ? "supabase/bank_mix50.sql" : x.version === CLV ? "supabase/bank_klausul.sql" : "SQL bank soal";
   $("#bnBank").innerHTML = Object.values(BANKS).map(x => `<option value="${x.version}" ${!CFGS[x.version] ? "disabled" : ""}>${esc(x.label)}${!CFGS[x.version] ? " — jalankan " + need(x) : ""}</option>`).join("");
   $("#bnBank").value = bk.version; $("#bnBank").disabled = !hasSettings;
-  $("#bnName").value = b ? b.copart : ""; $("#bnNote").value = b ? b.note || "" : "";
+  $("#bnName").value = !hasTraining ? (b ? b.copart : "") : b ? bName(b) : t0 ? `Test ${tBatches(t0).length + 1}` : "";
+  $("#bnNote").value = b ? b.note || "" : "";
   $("#bnMin").value = b ? b.duration_minutes || bk.minutes : bk.minutes; $("#bnPass").value = num(s.pass_mark) ?? 70;
   $("#bnFrom").value = keepSched ? toLocal(b.open_from) : ""; $("#bnUntil").value = keepSched ? toLocal(b.open_until) : "";
   $("#bnRule").value = RULES[s.remedial_rule] ? s.remedial_rule : "kkm"; syncRule();
@@ -418,16 +554,18 @@ function openBatch(b, dup) {
     : (editId ? "Bank soal, durasi, pengacakan, pengaturan klausul, dan wajib jawab semua berlaku untuk peserta yang mulai setelah perubahan disimpan. Nilai lulus, tampilkan nilai, aturan remidi, dan jadwal berlaku langsung. " : "")
       + "Mode layar penuh, perlindungan salin, dan pencatatan keluar halaman selalu aktif.";
   $("#bnAdd").textContent = dup ? "Buat Salinan" : b ? "Simpan" : "Buat Batch"; $("#bnErr").textContent = "";
-  syncPresets(); $("#mBatch").hidden = false; $("#bnName").focus(); if (dup) $("#bnName").select();
+  syncPresets(); $("#mBatch").hidden = false;
+  if (hasTraining && !trn) $("#bnTrn").focus(); else { $("#bnName").focus(); if (dup || !b) $("#bnName").select(); }
 }
 const closeBatch = () => $("#mBatch").hidden = true;
-$("#bNew").onclick = () => openBatch(); $("#mbX").onclick = $("#mbNo").onclick = closeBatch;
+$("#mbX").onclick = $("#mbNo").onclick = closeBatch;
 document.addEventListener("keydown", e => { if (e.key === "Escape" && !$("#mBatch").hidden) closeBatch(); });
 $("#fBatch").addEventListener("submit", async e => {
   e.preventDefault(); const err = m => $("#bnErr").textContent = m; err("");
   const name = $("#bnName").value.trim(), note = $("#bnNote").value.trim(), min = Number($("#bnMin").value), pm = Number($("#bnPass").value);
-  const from = fromLocal($("#bnFrom").value), until = fromLocal($("#bnUntil").value);
-  if (name.length < 2) return err("Isi nama Copart (minimal 2 karakter).");
+  const from = fromLocal($("#bnFrom").value), until = fromLocal($("#bnUntil").value), trn = hasTraining ? $("#bnTrn").value : null;
+  if (hasTraining && !trn) return err("Pilih training untuk batch ini.");
+  if (name.length < 2) return err(hasTraining ? "Isi nama batch (minimal 2 karakter)." : "Isi nama Copart (minimal 2 karakter).");
   if (!Number.isInteger(min) || min < 5 || min > 600) return err("Durasi harus berupa bilangan bulat antara 5 dan 600 menit.");
   if (hasSettings && (!Number.isFinite(pm) || pm < 0 || pm > 100)) return err("Nilai minimal lulus harus antara 0 dan 100.");
   if (hasSettings && from && until && new Date(until) <= new Date(from)) return err("Waktu tutup harus setelah waktu buka.");
@@ -445,22 +583,83 @@ $("#fBatch").addEventListener("submit", async e => {
   $("#bnAdd").disabled = true;
   let data, error;
   if (editId) {
-    const p = { copart: name, note: note || null, duration_minutes: min };
+    const p = Object.assign(hasTraining ? { training_id: trn, name } : { copart: name }, { note: note || null, duration_minutes: min });   // nama Copart mengikuti Training (trigger database)
     if (hasSettings) Object.assign(p, { settings, open_from: from, open_until: until });
     ({ data, error } = await sb.from("batches").update(p).eq("id", editId).select().single());
+  } else if (hasTraining) {
+    ({ data, error } = await sb.rpc("create_batch", { p_training: trn, p_name: name, p_note: note, p_minutes: min, p_settings: settings, p_open_from: from, p_open_until: until }));
   } else {
     ({ data, error } = await sb.rpc("create_batch", hasSettings ? { p_copart: name, p_note: note, p_minutes: min, p_settings: settings, p_open_from: from, p_open_until: until } : { p_copart: name, p_note: note, p_minutes: min }));
   }
   $("#bnAdd").disabled = false;
-  if (error) return err("Gagal menyimpan: " + error.message + (/function|p_settings|p_minutes|schema cache|column/i.test(error.message) ? " — jalankan ulang supabase/batch.sql dan supabase/settings.sql di SQL Editor." : ""));
+  if (error) return err("Gagal menyimpan: " + error.message + (/function|p_settings|p_minutes|p_training|schema cache|column/i.test(error.message) ? " — jalankan ulang supabase/batch.sql, supabase/settings.sql, lalu supabase/training.sql di SQL Editor." : ""));
   closeBatch();
   if (!editId) {
-    $("#bnOk").innerHTML = `<div class="newcode"><div><div class="small mut">Batch dibuat untuk <b>${esc(data.copart)}</b> (${esc(bankOfBatch(data).label)}, ${data.duration_minutes} menit). Bagikan kode ini ke peserta:</div><div class="code" style="margin-top:8px">${esc(data.code)}</div></div>
+    $("#bnOk").innerHTML = `<div class="newcode"><div><div class="small mut">Batch dibuat untuk <b>${esc(bPath(data))}</b> (${esc(bankOfBatch(data).label)}, ${data.duration_minutes} menit). Bagikan kode ini ke peserta:</div><div class="code" style="margin-top:8px">${esc(data.code)}</div></div>
       <div class="sp"></div><button class="btn ghost sm" id="ncCode">Salin kode</button><button class="btn ghost sm" id="ncLink">Salin tautan</button><button class="btn ghost sm" id="ncX">Tutup</button></div>`;
     $("#ncCode").onclick = e => copy(data.code, e.currentTarget); $("#ncLink").onclick = e => copy(pubUrl(data.code), e.currentTarget); $("#ncX").onclick = () => $("#bnOk").innerHTML = "";
   }
   load();
 });
+
+// ---- form Copart & Training (alur: Copart → Training → Batch) ----
+let cpEdit = null, tnEdit = null, tnCop = null;
+const SIG = ["Dibuat", "Disetujui", "Diketahui"];
+function openCop(c) {
+  cpEdit = c ? c.id : null;
+  $("#mcTitle").textContent = c ? "Ubah Copart" : "Copart Baru";
+  $("#cpName").value = c ? c.name : ""; $("#cpNote").value = c ? c.note || "" : "";
+  $("#cpGo").textContent = c ? "Simpan" : "Buat Copart"; $("#cpErr").textContent = "";
+  $("#mCop").hidden = false; $("#cpName").focus();
+}
+const closeCop = () => $("#mCop").hidden = true;
+$("#mcX").onclick = $("#mcNo").onclick = closeCop;
+$("#fCop").addEventListener("submit", async e => {
+  e.preventDefault(); const err = m => $("#cpErr").textContent = m; err("");
+  const name = $("#cpName").value.trim().replace(/\s+/g, " "), note = $("#cpNote").value.trim() || null, isNew = !cpEdit;
+  if (name.length < 2) return err("Isi nama Copart (minimal 2 karakter).");
+  $("#cpGo").disabled = true;
+  const { data, error } = await (isNew ? sb.from("coparts").insert({ name, note }) : sb.from("coparts").update({ name, note }).eq("id", cpEdit)).select().single();
+  $("#cpGo").disabled = false;
+  if (error) return err(/duplicate|unique/i.test(error.message) ? "Nama Copart ini sudah ada." : "Gagal menyimpan: " + error.message);
+  closeCop(); await load();
+  if (isNew) { nav("batch", data.id); openTrn(null, data.id); }      // langkah berikutnya: training
+});
+
+function openTrn(t, copId) {
+  tnEdit = t ? t.id : null; tnCop = t ? t.copart_id : copId;
+  // kode formulir, nilai lulus & tanda tangan dari training sebelumnya di Copart ini; Copart baru hanya mewarisi kolom "Dibuat" (trainer)
+  const c = cOf(tnCop) || {}, other = trainings[0], prev = t || cTrainings(c)[0] || (other ? { pass_mark: other.pass_mark, signers: (other.signers || []).slice(0, 1) } : {});
+  $("#mtTitle").textContent = t ? "Ubah Training" : "Training Baru";
+  $("#mtSub").textContent = (c.name || "") + (t ? "" : " · langkah 2 dari 3: Copart → Training → Batch");
+  $("#tnName").value = t ? t.name : ""; $("#tnFrom").value = t ? t.date_from || "" : ""; $("#tnTo").value = t ? t.date_to || "" : "";
+  $("#tnPass").value = prev.pass_mark ?? 70; $("#tnForm").value = prev.form_code || ""; $("#tnNote").value = t ? t.note || "" : "";
+  const sg = Array.isArray(prev.signers) ? prev.signers : [];
+  $("#tnSig").innerHTML = SIG.map((l, i) => { const x = sg[i] || {};
+    return `<div class="sig"><input type="text" data-s="label" maxlength="30" value="${esc(x.label ?? l)}" aria-label="Kolom tanda tangan ${i + 1}"><input type="text" data-s="name" maxlength="80" value="${esc(x.name || "")}" placeholder="Nama" aria-label="Nama ${i + 1}"><input type="text" data-s="title" maxlength="80" value="${esc(x.title || "")}" placeholder="Jabatan" aria-label="Jabatan ${i + 1}"></div>`; }).join("");
+  $("#tnGo").textContent = t ? "Simpan" : "Buat Training"; $("#tnErr").textContent = "";
+  $("#mTrn").hidden = false; $("#tnName").focus();
+}
+const closeTrn = () => $("#mTrn").hidden = true;
+$("#mtX").onclick = $("#mtNo").onclick = closeTrn;
+$("#tnFrom").onchange = () => { const f = $("#tnFrom").value; if (f && (!$("#tnTo").value || $("#tnTo").value < f)) $("#tnTo").value = f; };
+$("#fTrn").addEventListener("submit", async e => {
+  e.preventDefault(); const err = m => $("#tnErr").textContent = m; err("");
+  const name = $("#tnName").value.trim().replace(/\s+/g, " "), from = $("#tnFrom").value || null, to = $("#tnTo").value || from, pm = Number($("#tnPass").value), isNew = !tnEdit;
+  if (name.length < 2) return err("Isi nama training (minimal 2 karakter).");
+  if (from && to && to < from) return err("Tanggal selesai harus sama dengan atau setelah tanggal mulai.");
+  if (!Number.isInteger(pm) || pm < 0 || pm > 100) return err("Nilai minimal lulus harus bilangan bulat antara 0 dan 100.");
+  const signers = [...$$("#tnSig .sig")].map(r => Object.fromEntries([...r.querySelectorAll("input")].map(i => [i.dataset.s, i.value.trim()])));
+  const p = { name, date_from: from, date_to: to, pass_mark: pm, form_code: $("#tnForm").value.trim() || null, signers, note: $("#tnNote").value.trim() || null };
+  if (isNew) p.copart_id = tnCop;
+  $("#tnGo").disabled = true;
+  const { data, error } = await (isNew ? sb.from("trainings").insert(p) : sb.from("trainings").update(p).eq("id", tnEdit)).select().single();
+  $("#tnGo").disabled = false;
+  if (error) return err("Gagal menyimpan: " + error.message);
+  closeTrn(); await load();
+  if (isNew) openBatch(null, false, data.id);                    // langkah berikutnya: batch
+});
+document.addEventListener("keydown", e => { if (e.key !== "Escape") return; if (!$("#mCop").hidden) closeCop(); if (!$("#mTrn").hidden) closeTrn(); });
 
 // ---- remidi: peserta di bawah KKM mengulang di baris & batch yang sama ----
 // Hasil percobaan sebelumnya disimpan di history; peserta memulai remidi dengan kode remidi (perangkat mana pun)
@@ -509,7 +708,7 @@ function openRem(b) {
 function renderRem(opened) {
   const b = remB, p = rows.filter(r => r.batch_id === b.id), fail = p.filter(failed), live = p.filter(r => r.status === "remedial" || (r.status === "in_progress" && r.remedial));
   const done = p.filter(r => r.remedial && scored(r)), pm = num((b.settings || {}).pass_mark) ?? 70, rule = RULES[(b.settings || {}).remedial_rule] ? (b.settings || {}).remedial_rule : "kkm";
-  $("#mrSub").textContent = `${b.copart} · kode ${b.code} · KKM ${pm} · nilai akhir: ${RULES[rule][0]}`;
+  $("#mrSub").textContent = `${bPath(b)} · kode ${b.code} · KKM ${pm} · nilai akhir: ${RULES[rule][0]}`;
   const row = (r, extra) => `<div class="rrow"><div><b>${esc(r.name)}</b><div class="xs mut">${esc(r.job_title)}${extra ? " · " + extra : ""}</div></div>`;
   $("#mrBody").innerHTML = (opened && opened.length ? `<div class="alert info"><b>Remidi dibuka untuk ${opened.length} peserta.</b> Bagikan kode atau tautan masing-masing. Peserta yang membuka halaman ujian di perangkat yang sama juga langsung melihat tombol <b>Mulai Remidi</b>.</div>` : "")
     + `<h4 class="mr-h">Belum lulus (${fail.length})</h4>` + (fail.length
@@ -907,6 +1106,102 @@ function renderClauseAnal(fin, bankBar) {
   $("#anArea").onchange = e => { an.area = e.target.value; renderAnal(); };
 }
 
+// ---- laporan rekap nilai per Training (format "Rekap Penilaian Peserta") ----
+// Satu baris per peserta; kolom Nilai Test 1..n = batch di training (urut dibuat); Nilai Akhir = rata-rata nilai test yang ada.
+// Kesimpulan lulus/tidak lulus memakai nilai minimal lulus training. Rumus Excel tetap aktif bila trainer mengubah nilai.
+async function logoB64() {                          // logo diperkecil ke lebar 240 px agar file laporan tetap ringan
+  const r = await fetch("assets/logo.png"); if (!r.ok) return null;
+  const img = await createImageBitmap(await r.blob());
+  const cv = document.createElement("canvas"); cv.width = 240; cv.height = Math.round(240 * img.height / img.width);
+  cv.getContext("2d").drawImage(img, 0, 0, cv.width, cv.height);
+  return { b64: cv.toDataURL("image/png").split(",")[1], h: cv.height / cv.width };
+}
+async function exportReport(t) {
+  await load(); t = tOf(t.id) || t;
+  const c = cOf(t.copart_id) || {}, bs = tBatches(t), ppl = people(bs), n = Math.max(1, bs.length), pm = t.pass_mark ?? 70;
+  const wb = new ExcelJS.Workbook(); wb.creator = "Total Quality Training Exam"; wb.created = new Date();
+  const ws = wb.addWorksheet("Rekap Nilai");
+  const T1 = 4, L = T1 + n, colL = ws.getColumn(L).letter, colT1 = ws.getColumn(T1).letter, colTn = ws.getColumn(L - 1).letter;   // A No · B Nama · C Jabatan · D.. Test · terakhir Nilai Akhir
+  const thin = { style: "thin" }, box = { top: thin, left: thin, bottom: thin, right: thin };
+  const YEL = { type: "pattern", pattern: "solid", fgColor: { argb: "FFFFFF00" } }, BLU = { type: "pattern", pattern: "solid", fgColor: { argb: "FFB4C6E7" } };
+  const mid = { vertical: "middle", horizontal: "center", wrapText: true };
+  const cell = (ref, v, st) => { const x = ws.getCell(ref); x.value = v; if (st) Object.assign(x, st); return x; };
+  const merge = (a, b, v, st) => { if (a !== b) ws.mergeCells(`${a}:${b}`); return cell(a, v, st); };
+  const boxAll = (r1, r2, c1, c2) => { for (let r = r1; r <= r2; r++) for (let k = c1; k <= c2; k++) ws.getCell(r, k).border = box; };
+  ws.getColumn(1).width = 7; ws.getColumn(2).width = 32; ws.getColumn(3).width = 30;
+  const tw = Math.max(n > 4 ? 9 : 11, Math.ceil(22 / n));          // kolom test cukup lebar untuk label Kesimpulan di bawahnya
+  for (let k = T1; k < L; k++) ws.getColumn(k).width = tw;
+  ws.getColumn(L).width = 15;
+
+  // kepala laporan: logo · nama training / Copart / tanggal · kode formulir
+  const H = { font: { bold: true, size: 16 }, alignment: mid };
+  merge("A1", "B3", "", { alignment: mid });
+  merge(`C1`, `${colTn}1`, t.name.toUpperCase(), H);
+  merge(`C2`, `${colTn}2`, (c.name || "").toUpperCase(), H);
+  merge(`C3`, `${colTn}3`, fmtRange(t), H);
+  merge(`${colL}1`, `${colL}3`, t.form_code || "", { font: { bold: true, size: 11 }, alignment: mid });
+  if (t.form_code) boxAll(1, 3, L, L);
+  // judul panjang dibungkus beberapa baris: tinggi baris diperkirakan dari lebar kolom C..test terakhir (±0,6 huruf 16pt per satuan lebar)
+  const cap = Math.max(10, Math.floor((30 + tw * n) * 0.6)), lines = s => Math.max(1, Math.ceil(String(s).length / cap));
+  [t.name, c.name || "", fmtRange(t)].forEach((s, i) => ws.getRow(i + 1).height = Math.max(26, lines(s) * 21));
+  const lg = await logoB64().catch(() => null);
+  if (lg) ws.addImage(wb.addImage({ base64: lg.b64, extension: "png" }), { tl: { col: 1.25, row: 0.15 }, ext: { width: Math.round(92 / Math.max(1, lg.h)), height: Math.round(92 * Math.min(1, lg.h)) } });
+
+  // tabel nilai
+  const HD = { font: { bold: true, size: 11 }, alignment: mid };
+  merge("A4", "A5", "NO", HD); merge("B4", "B5", "NAMA", HD); merge("C4", "C5", "JABATAN", HD);
+  merge(`${colT1}4`, `${colTn}4`, "NILAI TEST", HD);
+  for (let i = 0; i < n; i++) cell(`${ws.getColumn(T1 + i).letter}5`, i + 1, HD);
+  merge(`${colL}4`, `${colL}5`, "NILAI AKHIR", Object.assign({ fill: BLU }, HD));
+  ws.getCell(`${colL}5`).fill = BLU;
+  const R0 = 6, RN = R0 + Math.max(ppl.length, 1) - 1;
+  ppl.forEach((p, i) => {
+    const r = R0 + i, row = ws.getRow(r);
+    cell(`A${r}`, i + 1, { alignment: mid, font: { size: 11 } });
+    cell(`B${r}`, p.name, { alignment: { vertical: "middle", wrapText: true }, font: { size: 10 } });
+    cell(`C${r}`, String(p.job || "").toUpperCase(), { alignment: { vertical: "middle", wrapText: true }, font: { size: 10 } });
+    for (let k = 0; k < n; k++) cell(`${ws.getColumn(T1 + k).letter}${r}`, p.scores[k] ?? null, { alignment: mid, font: { size: 11 } });
+    const rg = `${colT1}${r}:${colTn}${r}`;
+    cell(`${colL}${r}`, { formula: `IF(COUNT(${rg})=0,"",ROUND(AVERAGE(${rg}),1))`, result: p.final ?? "" }, { alignment: mid, font: { bold: true, size: 12 }, fill: BLU });
+    row.height = 18;
+  });
+  boxAll(4, RN, 1, L);
+  for (let r = R0; r <= RN; r++) ws.getCell(`${colL}${r}`).fill = BLU;
+
+  // test yang diberikan · kesimpulan
+  const F = RN + 2, rgA = `${colL}${R0}:${colL}${RN}`, fin = ppl.filter(p => p.final !== null), pass = fin.filter(p => p.final >= pm).length;
+  const FH = { font: { bold: true, size: 11 }, alignment: mid, fill: YEL };
+  merge(`A${F}`, `C${F}`, "TEST YANG DIBERIKAN", FH); ws.getCell(`B${F}`).fill = ws.getCell(`C${F}`).fill = YEL;
+  bs.forEach((b, i) => { const r = F + 1 + i; cell(`A${r}`, i + 1, { font: { bold: true }, alignment: mid }); merge(`B${r}`, `C${r}`, bName(b), { alignment: { vertical: "middle", wrapText: true } }); });
+  boxAll(F, F + Math.max(bs.length, 1), 1, 3);
+  const K1 = T1, kRow = (r, label, v) => { merge(`${colT1}${r}`, `${colTn}${r}`, label, { alignment: mid }); cell(`${colL}${r}`, v, { alignment: mid }); };   // label di kolom test, jumlah di kolom Nilai Akhir
+  merge(`${colT1}${F}`, `${colL}${F}`, "KESIMPULAN", FH); for (let k = K1; k <= L; k++) ws.getCell(F, k).fill = YEL;
+  kRow(F + 1, "LULUS", { formula: `COUNTIF(${rgA},">="&${pm})&" Peserta"`, result: `${pass} Peserta` });
+  kRow(F + 2, "TIDAK LULUS", { formula: `COUNTIF(${rgA},"<"&${pm})&" Peserta"`, result: `${fin.length - pass} Peserta` });
+  kRow(F + 3, "NILAI MINIMAL LULUS", pm);
+  boxAll(F, F + 3, K1, L);
+
+  // catatan & tanda tangan (kolom B, C, D..akhir)
+  const N = F + Math.max(bs.length, 3) + 2;
+  merge(`A${N}`, `${colL}${N}`, "Note : " + (t.note || ""), { alignment: { vertical: "top", wrapText: true } });
+  const sg = (Array.isArray(t.signers) ? t.signers : []).filter(s => s && (s.label || s.name)), S = N + 2;
+  const spots = [["B", "B"], ["C", "C"], [colT1, colL]];
+  sg.slice(0, 3).forEach((s, i) => {
+    const [a, b] = spots[i];
+    merge(`${a}${S}`, `${b}${S}`, s.label || "", { font: { bold: true }, alignment: mid });
+    merge(`${a}${S + 5}`, `${b}${S + 5}`, s.name || "", { font: { bold: true, underline: true }, alignment: mid });
+    merge(`${a}${S + 6}`, `${b}${S + 6}`, s.title || "", { font: { bold: true }, alignment: mid });
+  });
+
+  const last = sg.length ? S + 6 : N;
+  ws.pageSetup = { paperSize: 9, orientation: n > 3 ? "landscape" : "portrait", fitToPage: true, fitToWidth: 1, fitToHeight: 0, horizontalCentered: true,
+    margins: { left: 0.4, right: 0.4, top: 0.5, bottom: 0.5, header: 0.3, footer: 0.3 }, printArea: `A1:${colL}${last}` };
+  const buf = await wb.xlsx.writeBuffer(), url = URL.createObjectURL(new Blob([buf], { type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" }));
+  const el = document.createElement("a"); el.href = url;
+  el.download = `Rekap Penilaian Peserta - ${t.name} ${c.name || ""}${fmtRange(t) ? ` (${fmtRange(t)})` : ""}`.replace(/[\\/:*?"<>|]+/g, " ").replace(/\s+/g, " ").trim() + ".xlsx";
+  el.click(); setTimeout(() => URL.revokeObjectURL(url), 1000);
+}
+
 // ---- ekspor Excel (sheet terpisah per bank soal bila batch berisi lebih dari satu bank) ----
 $("#bXls").onclick = async () => {
   $("#bXls").disabled = true; $("#bXls").textContent = "Menyiapkan…";
@@ -993,7 +1288,7 @@ async function exportXlsx() {
     ["G", "H"].forEach(col => w1.getColumn(col).numFmt = "dd/mm/yyyy hh:mm");
   }
   const buf = await wb.xlsx.writeBuffer(), url = URL.createObjectURL(new Blob([buf], { type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" }));
-  const el = document.createElement("a"); el.href = url; const bn = (bOf(bf) || {}).copart, slug = bn ? "_" + bn.replace(/[^A-Za-z0-9]+/g, "_").replace(/^_|_$/g, "") : "";
+  const el = document.createElement("a"); el.href = url; const bn = bf === "all" ? "" : fLabel(bf), slug = bn ? "_" + bn.replace(/[^A-Za-z0-9]+/g, "_").replace(/^_|_$/g, "") : "";
   el.download = "Hasil_Training_Exam" + slug + "_" + new Date().toISOString().slice(0, 10) + ".xlsx"; el.click(); URL.revokeObjectURL(url);
 }
 init();

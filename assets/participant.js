@@ -68,7 +68,7 @@ async function lookup(raw) {
   if (d.open_until && now > new Date(d.open_until).getTime()) return err("Batch ini sudah ditutup.");
   const bk = window.bankOf(d.settings);
   batch = { code, copart: d.copart, minutes: d.duration_minutes || bk.minutes };
-  $("#bCopart").textContent = batch.copart; $("#bInfo").textContent = `${bk.total} soal · ${batch.minutes} menit`;
+  $("#bCopart").textContent = batch.copart; $("#bInfo").textContent = [d.training, d.batch_name, `${bk.total} soal · ${batch.minutes} menit`].filter(Boolean).join(" · ");
   $("#fCode").hidden = true; $("#fStart").hidden = false; $("#name").focus();
 }
 

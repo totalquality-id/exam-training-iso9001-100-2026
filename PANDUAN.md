@@ -6,13 +6,15 @@ Aplikasi statis (HTML/JS) + Supabase. Tidak ada server yang perlu Anda kelola. S
 |---|---|---|---|
 | **100 soal pilihan ganda** | 100 PG dalam 9 area | Otomatis, 1 poin per soal | 90 menit |
 | **50 soal campuran** | A: 25 PG · B: 5 benar/salah + alasan · C: 5 studi kasus · D: kasus terpadu | PG & benar/salah otomatis; alasan dan studi kasus dinilai trainer dengan rubrik | 75 menit |
-| **Hafalan klausul ISO 9001:2026** | Jenis 1: nomor → judul klausul · Jenis 2: judul → nomor (78 klausul, Edisi 6) | Otomatis dengan toleransi salah ketik; trainer dapat mengoreksi per soal | 60 menit |
+| **Hafalan klausul ISO 9001:2026** | Jenis 1: nomor → judul klausul · Jenis 2: judul → nomor (78 klausul, Edisi 6) | Otomatis dengan toleransi salah ketik + regex padanan kata Indonesia/Inggris; trainer dapat mengoreksi per soal | 60 menit |
 
 ## Untuk instalasi yang sudah berjalan — yang perlu dilakukan sekarang
 Jalankan di Supabase → **SQL Editor** (semua aman dijalankan ulang; data peserta & batch tidak dihapus):
 1. `supabase/settings.sql` — **jalankan ulang walaupun sudah pernah**. Versi ini menambah kolom & fungsi **remidi**, **undian soal bank klausul**, dan memperbarui `my_result` (nilai klausul & nilai setelah remidi).
 2. `supabase/bank_mix50.sql` — kunci & rubrik bank 50 soal (lewati bila sudah pernah).
 3. `supabase/bank_klausul.sql` — kunci bank hafalan klausul (baris ketiga `grading_config`).
+> **Pembaruan penilaian regex bank klausul**: jalankan ulang berurutan `settings.sql` → `bank_klausul.sql` → `training.sql`. `bank_klausul.sql` membutuhkan fungsi baru di `settings.sql` (`clause_tok`), jadi harus sesudahnya.
+
 4. `supabase/training.sql` — **baru**: Copart → Training → Batch dan laporan rekap per Training. Batch lama otomatis dikelompokkan (lihat *Copart, Training, dan Batch*). Jalankan **setelah** `settings.sql`; bila `settings.sql` dijalankan ulang di kemudian hari, jalankan ulang `training.sql` sesudahnya.
 5. Deploy ulang situs (Vercel otomatis setelah push), lalu login ulang di `admin.html`.
 
@@ -112,8 +114,11 @@ Sumber: daftar klausul final Edisi 6 (78 klausul, 1 s.d. 10.2). Dua jenis soal i
 
 - Soal diundi **di server** saat peserta menekan Mulai Ujian, lalu disimpan di data peserta (tidak dapat diubah peserta). Kunci nomor ↔ judul hanya ada di database.
 - Soal tampil 20 per halaman; tombol Enter pindah ke kolom berikutnya.
-- **Penilaian**: 1 poin per soal, nilai = benar ÷ jumlah soal × 100. Jenis 1: huruf besar/kecil, tanda baca, dan "&"/"dan" diabaikan; salah ketik kecil (jarak edit ≤ 15% panjang judul) tetap benar. Jenis 2: "Klausul 7.1.4.", "7,1,4" dianggap "7.1.4"; nomor harus tepat.
-- **Koreksi trainer**: di detail peserta, setiap soal punya tombol **Anggap benar / Anggap salah** (mis. urutan kata tertukar). Koreksi tersimpan otomatis, ikut dihitung di nilai peserta, Excel, dan filter **Dikoreksi**.
+- **Penilaian awal otomatis**: 1 poin per soal, nilai = benar ÷ jumlah soal × 100.
+  - **Jenis 1** (judul), berurutan: (1) huruf besar/kecil, tanda baca, dan "&"/"dan" diabaikan; sama dengan judul Indonesia **atau Inggris** (mis. *Customer focus*) → benar; salah ketik kecil (jarak edit ≤ 15% panjang judul) → benar. (2) **Regex padanan kata**: akhiran "-nya" dan kata sambung (dan, untuk, of, the, …) dibuang, kata Indonesia/Inggris/singkatan disamakan (*kualitas/quality → mutu*, *kontrol/control → pengendalian*, *SMM/QMS*, *RTM*, *SDM*, *NC*, …), lalu kata kuncinya dicocokkan tanpa memperhatikan urutan (per kata masih toleran salah ketik). Benar bila semua kata kunci cocok, atau minimal 2/3 kata kunci cocok tanpa kata lain (mis. *kontrol dokumen* untuk 7.5.3). Jawaban yang persis judul klausul lain selalu salah (mis. *Audit Internal* untuk 9.2.2, *Tindakan untuk Mengatasi Risiko* untuk 6.1).
+  - **Jenis 2** (nomor): angka diambil dengan regex — "Klausul 7.1.4.", "7,1,4", "7 1 4" dianggap "7.1.4"; nomor harus tepat.
+  - Kamus padanan (`rx`) dan judul Inggris (`e1`) ada di `supabase/bank_klausul.sql`; tambah padanan baru di `rx.syn` lalu jalankan ulang file itu. Penilaian di konsol trainer dan nilai yang dilihat peserta memakai aturan yang sama.
+- **Koreksi trainer**: penilaian regex hanya membantu di awal. Kolom *Hasil* menjelaskan dasar penilaiannya (mis. *regex: 2/3 kata kunci*, *sama dengan judul klausul 9.2*); filter **Perlu dicek** menampilkan jawaban yang dinilai dari kemiripan. Bila kurang sesuai, klik **Anggap benar / Anggap salah**. Koreksi tersimpan otomatis, menimpa penilaian otomatis, ikut dihitung di nilai peserta, Excel (kolom *Penilaian otomatis* & *Koreksi trainer*), dan filter **Dikoreksi**.
 - Analisis soal untuk bank ini dihitung **per klausul** (karena tiap peserta mendapat soal berbeda), termasuk jawaban salah yang paling sering — berguna untuk melihat klausul yang sering tertukar.
 
 ## Remidi (peserta di bawah KKM)

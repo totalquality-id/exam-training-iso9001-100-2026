@@ -211,12 +211,12 @@ function calcRaw(a, ms) {
   const bk = bankOfA(a), cf = cfgOf(bk); if (!cf) return null;
   const ans = a.answers || {}, mc = ans.mc || {}, comp = {}, pm = passMark(a); let right = 0;
   if (bk.kind === "clause") {
-    // hafalan klausul: 1 poin per soal; koreksi trainer (manual_scores "jenis:ref" = 1/0) menimpa hasil otomatis
+    // hafalan klausul: 1 poin per soal; penilaian otomatis (salah ketik + regex padanan kata), koreksi trainer (manual_scores "jenis:ref" = 1/0) menimpanya
     ms = ms || a.manual_scores || {};
     const res = {}, parts = { 1: 0, 2: 0 }, pmax = { 1: 0, 2: 0 }, txt = ans.txt || {};
     bk.items.forEach(it => {
       const p1 = it.part === "1", key = p1 ? cf.t1[it.ref] : cf.t2[it.ref], nm = p1 ? it.ref : cf.t2[it.ref] || "?";
-      const g = window.clauseGrade(it.part, key || "", txt[it.n]), o = ms[it.part + ":" + it.ref], ov = o === 0 || o === 1 ? o : undefined;
+      const g = window.clauseGrade(it.part, it.ref, txt[it.n], cf), o = ms[it.part + ":" + it.ref], ov = o === 0 || o === 1 ? o : undefined;
       const ok = ov === undefined ? g.ok : ov === 1, c = String(nm).split(".")[0];
       res[it.n] = { ok, g, ov, key: key || "?", num: nm, title: cf.t1[nm] || "" };
       comp[c] = comp[c] || { got: 0, max: 0 }; comp[c].max++; pmax[it.part]++;
@@ -799,8 +799,8 @@ function openDet(id, keep) {
         <td>${c && scored(a) && c.final ? `<b>${c.raw}</b> → nilai akhir <b>${c.total}</b> <span class="xs mut">(${esc(RULES[c.rule || "kkm"][0])})</span>` : "—"}</td><td>${c && scored(a) && c.final ? passBadge(c) : ""}</td></tr></tbody></table></div>` : ""}
     <div id="sum"></div>
     ${wait || legacy || !cfgOf(bk) ? "" : bk.kind === "clause"
-      ? `<div class="bar" style="margin-top:28px"><h2 style="margin-right:auto">Jawaban</h2><span class="mut small" id="grSt"></span><div class="seg" id="pf"><button data-v="all">Semua</button><button data-v="wrong">Salah / kosong</button><button data-v="fix">Dikoreksi</button><button data-v="flag">Ragu-ragu</button></div></div>
-      <div class="alert info">Penilaian otomatis menoleransi huruf besar/kecil, tanda baca, dan salah ketik kecil pada judul. Klik <b>Anggap benar / Anggap salah</b> untuk mengoreksi; perubahan tersimpan otomatis dan nilai diperbarui.</div><div id="pn"></div>`
+      ? `<div class="bar" style="margin-top:28px"><h2 style="margin-right:auto">Jawaban</h2><span class="mut small" id="grSt"></span><div class="seg" id="pf"><button data-v="all">Semua</button><button data-v="wrong">Salah / kosong</button><button data-v="auto">Perlu dicek</button><button data-v="fix">Dikoreksi</button><button data-v="flag">Ragu-ragu</button></div></div>
+      <div class="alert info">Penilaian awal otomatis: huruf besar/kecil, tanda baca, dan salah ketik kecil diabaikan; judul juga dicocokkan dengan <b>regex</b> — padanan kata Indonesia/Inggris/singkatan (mis. <i>Customer focus</i>, <i>SMM</i>) dan kata kunci yang cukup mirip. Filter <b>Perlu dicek</b> menampilkan jawaban yang dinilai dari kemiripan. Bila penilaian otomatis kurang sesuai, klik <b>Anggap benar / Anggap salah</b>; koreksi tersimpan otomatis dan nilai diperbarui.</div><div id="pn"></div>`
       : bk.manual
       ? `<div class="bar" style="margin-top:28px"><h2 style="margin-right:auto">Jawaban &amp; penilaian</h2><span class="mut small" id="grMsg"></span><div class="seg" id="gt">${Object.entries(bk.parts).map(([k, p]) => `<button data-v="${k}">${k} · ${esc(p.name)}</button>`).join("")}</div></div><div id="pn"></div>`
       : `<div class="bar" style="margin-top:28px"><h2 style="margin-right:auto">Jawaban</h2><div class="seg" id="pf"><button data-v="all">Semua</button><button data-v="wrong">Salah / kosong</button><button data-v="flag">Ragu-ragu</button></div></div>
@@ -873,21 +873,25 @@ function mcTable(items, cf, pts) {
 function panel() { const bk = bankOfA(cur.a); $("#pn").innerHTML = mcTable(bk.items, cfgOf(bk), 1); }
 
 // ---- hafalan klausul: jawaban per jenis + koreksi trainer (manual_scores "jenis:ref" = 1 benar / 0 salah), tersimpan otomatis ----
+// keterangan penilaian otomatis (window.clauseGrade); kosong bila persis kunci, kosong, atau jelas salah
+const gradeNote = g => ({ en: "judul bahasa Inggris", typo: `ejaan mirip ${g.sim}%`, rx: "regex: padanan kata/bahasa", part: `regex: ${g.h}/${g.n} kata kunci` })[g.how]
+  || (g.how !== "no" ? "" : g.conf ? `sama dengan judul klausul ${g.conf}` : g.h ? `regex: ${g.h}/${g.n} kata kunci${g.e ? `, ${g.e} kata lain` : ""}` : "");
 function clausePanel() {
   const a = cur.a, c = calc(a, cur.draft), bk = c.bk, fin = scored(a), fl = flOf(a), txt = (a.answers || {}).txt || {};
   const res = it => { const r = c.res[it.n], f = fl.includes(it.n);
     if (cur.filter === "wrong" && (!fin || r.ok)) return "";
     if (cur.filter === "fix" && r.ov === undefined) return "";
     if (cur.filter === "flag" && !f) return "";
-    const v = txt[it.n], p1 = it.part === "1";
-    const how = !fin ? "—" : r.ov !== undefined ? `${r.ok ? "Benar" : "Salah"} <span class="xs mut">· koreksi trainer</span>` : r.ok ? (r.g.exact ? "Benar" : `Benar <span class="xs mut">· ejaan mirip ${r.g.sim}%</span>`) : "Salah";
+    if (cur.filter === "auto" && !gradeNote(r.g)) return "";
+    const v = txt[it.n], p1 = it.part === "1", note = gradeNote(r.g);
+    const how = !fin ? "—" : r.ov !== undefined ? `${r.ok ? "Benar" : "Salah"} <span class="xs mut">· koreksi trainer${note ? ` (otomatis: ${r.g.ok ? "benar" : "salah"}, ${note})` : ""}</span>` : `${r.ok ? "Benar" : "Salah"}${note ? ` <span class="xs mut">· ${note}</span>` : ""}`;
     const btn = !fin ? "" : r.ov !== undefined ? `<button type="button" class="link" data-ov="${it.n}" data-to="">Kembalikan otomatis</button>` : `<button type="button" class="link" data-ov="${it.n}" data-to="${r.ok ? 0 : 1}">${r.ok ? "Anggap salah" : "Anggap benar"}</button>`;
     return `<tr><td class="nw">${it.n}${f ? `<span class="fmark" title="Ditandai ragu-ragu">R</span>` : ""}</td>
       <td>${p1 ? `<b>${esc(it.ref)}</b>` : `${esc(it.q)}${it.sub ? `<div class="xs mut">${esc(it.sub)}</div>` : ""}`}</td>
       <td>${v && String(v).trim() ? esc(v) : `<span class="mut">—</span>`}</td>
       <td>${p1 ? esc(r.key) : `<b>${esc(r.num)}</b>`}</td>
       <td class="nw ${fin ? (r.ok ? "ok" : "no") : ""}">${how}<div>${btn}</div></td></tr>`; };
-  const none = { flag: "Tidak ada soal yang ditandai ragu-ragu.", fix: "Belum ada koreksi trainer.", wrong: "Tidak ada jawaban salah.", all: "Tidak ada soal." }[cur.filter] || "Tidak ada soal.";
+  const none = { flag: "Tidak ada soal yang ditandai ragu-ragu.", fix: "Belum ada koreksi trainer.", wrong: "Tidak ada jawaban salah.", auto: "Tidak ada jawaban yang dinilai dengan kemiripan — semua jawaban persis kunci atau jelas salah.", all: "Tidak ada soal." }[cur.filter] || "Tidak ada soal.";
   const tbl = (p, head) => { const items = bk.items.filter(it => it.part === p); if (!items.length) return "";
     const body = items.map(res).join("");
     return `<h3 style="margin:18px 2px 10px">Jenis ${p} · ${esc(bk.parts[p].name)} <span class="mut small" style="font-weight:500">${c.parts[p]}/${c.pmax[p]} benar</span></h3>
@@ -1228,7 +1232,7 @@ function exportClause(wb, items, sfx) {             // bank hafalan klausul: soa
   const w1 = wb.addWorksheet("Rekap Nilai" + sfx), w2 = wb.addWorksheet("Detail Jawaban" + sfx), w4 = wb.addWorksheet("Analisis Soal" + sfx);
   const codes = BANKS[CLV].codes || {}, mains = Object.keys(codes).sort((x, y) => x - y);
   cols(w1, [...baseCols, ["Benar", 9], ["Jumlah soal", 10], ["Nilai (/100)", 12], ["Kategori", 24], ["Nilai lulus", 10], ["Lulus", 12], ["Jenis 1 benar", 12], ["Jenis 2 benar", 12], ...mains.map(k => [`Klausul ${k} (%)`, 11]), ...monCols]);
-  cols(w2, [["Nama", 24], ["Jabatan", 20], ["Copart", 22], ["No", 6], ["Jenis", 7], ["Soal", 50], ["Jawaban peserta", 40], ["Kunci", 40], ["Hasil", 10], ["Koreksi trainer", 12], ["Ragu-ragu", 10]]);
+  cols(w2, [["Nama", 24], ["Jabatan", 20], ["Copart", 22], ["No", 6], ["Jenis", 7], ["Soal", 50], ["Jawaban peserta", 40], ["Kunci", 40], ["Hasil", 10], ["Penilaian otomatis", 30], ["Koreksi trainer", 12], ["Ragu-ragu", 10]]);
   cols(w4, [["Klausul", 9], ["Judul", 50], ["Jenis 1 ditanyakan", 12], ["Jenis 1 % benar", 12], ["Jenis 2 ditanyakan", 12], ["Jenis 2 % benar", 12], ["Tingkat", 10], ["Salah terbanyak Jenis 1", 34], ["Salah terbanyak Jenis 2", 20], ["Ragu-ragu", 10]]);
   items.forEach((a, i) => {
     const bk = bankOfA(a), c = scored(a) ? calc(a) : null, fl = flOf(a), txt = (a.answers || {}).txt || {};
@@ -1236,7 +1240,7 @@ function exportClause(wb, items, sfx) {             // bank hafalan klausul: soa
       : ["", "", "", "", passMark(a), "", "", "", ...mains.map(() => "")]), ...monVals(a)]);
     if (!c) return;
     bk.items.forEach(it => { const r = c.res[it.n];
-      w2.addRow([a.name, a.job_title, a.copart || "", it.n, it.part, it.part === "1" ? "Klausul " + it.ref : it.q + (it.sub ? ` (${it.sub})` : ""), txt[it.n] || "", it.part === "1" ? r.key : r.num, r.ok ? "Benar" : "Salah", r.ov !== undefined ? "Ya" : "", fl.includes(it.n) ? "Ya" : ""]); });
+      w2.addRow([a.name, a.job_title, a.copart || "", it.n, it.part, it.part === "1" ? "Klausul " + it.ref : it.q + (it.sub ? ` (${it.sub})` : ""), txt[it.n] || "", it.part === "1" ? r.key : r.num, r.ok ? "Benar" : "Salah", gradeNote(r.g), r.ov !== undefined ? "Ya" : "", fl.includes(it.n) ? "Ya" : ""]); });
   });
   clauseStats(items.filter(a => scored(a) && isCur(a))).forEach(x => w4.addRow([x.n, x.title, x.a1, x.p1 ?? "", x.a2, x.p2 ?? "", lvl(x.p)[0], topWrong(x.w1), topWrong(x.w2), x.flags]));
   [w1, w2, w4].forEach(w => { head(w); body(w); });

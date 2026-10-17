@@ -73,17 +73,68 @@ end $$;
 create or replace function public.clause_nt(x text) returns text language sql immutable as $$
   select trim(regexp_replace(replace(lower(left(coalesce(x, ''), 200)), '&', ' dan '), '[^a-z0-9]+', ' ', 'g'));
 $$;
+-- Nomor klausul: semua angka di jawaban diambil dengan regex lalu digabung titik ("Klausul 7.1.4.", "7,1,4", "7 1 4" → "7.1.4")
 create or replace function public.clause_nn(x text) returns text language sql immutable as $$
-  select regexp_replace(regexp_replace(regexp_replace(replace(coalesce(x, ''), ',', '.'), '[^0-9.]', '', 'g'), '\.+', '.', 'g'), '^\.|\.$', '', 'g');
+  select coalesce(string_agg((m.g[1])::bigint::text, '.' order by m.i), '')
+  from regexp_matches(left(coalesce(x, ''), 100), '([0-9]{1,9})', 'g') with ordinality m(g, i);
 $$;
--- p = '1': jawaban judul (toleransi jarak edit ≤ 15%); p = '2': jawaban nomor (harus sama)
-create or replace function public.clause_ok(p text, k text, v text) returns boolean language plpgsql immutable as $$
-declare a text; b text;
+-- Kata kunci judul (pencocokan regex): normalisasi & buang akhiran "-nya" → padanan kata rx.syn ([pola regex, kata baku];
+-- Indonesia/Inggris/singkatan) → kata sambung rx.stop dibuang → kata unik terurut.
+-- Kamus rx tersimpan di grading_config bank klausul (supabase/bank_klausul.sql).
+create or replace function public.clause_tok(x text, rx jsonb) returns text[] language plpgsql immutable as $$
+declare s text := ' ' || regexp_replace(public.clause_nt(x), '([a-z]{3})nya\M', '\1', 'g') || ' '; r jsonb;
 begin
-  if p = '2' then a := public.clause_nn(v); return a <> '' and a = public.clause_nn(k); end if;
-  a := public.clause_nt(v); b := public.clause_nt(k);
+  for r in select value from jsonb_array_elements(coalesce(rx -> 'syn', '[]'::jsonb)) loop
+    s := regexp_replace(s, '\m(?:' || (r ->> 0) || ')\M', ' ' || (r ->> 1) || ' ', 'g');
+  end loop;
+  if coalesce(rx ->> 'stop', '') <> '' then s := regexp_replace(s, '\m(?:' || (rx ->> 'stop') || ')\M', ' ', 'g'); end if;
+  return array(select distinct t from regexp_split_to_table(trim(s), '\s+') t where t <> '' order by t);
+end $$;
+-- Satu kata cocok: sama, atau salah ketik kecil (≥ 5 huruf: 1 huruf, ≥ 9 huruf: 2 huruf)
+create or replace function public.clause_tm(a text, b text) returns boolean language sql immutable as $$
+  select a = b or (least(char_length(a), char_length(b)) >= 5
+    and public.lev(a, b) <= case when least(char_length(a), char_length(b)) >= 9 then 2 else 1 end);
+$$;
+-- Kecocokan kata kunci jawaban (a) dengan judul (k): 2 = semua cocok tanpa kata lain; 1 = ≥ 2/3 cocok tanpa kata lain,
+-- atau semua cocok dengan sedikit kata lain (judul ≥ 5 kata kunci); 0 = tidak cocok
+create or replace function public.clause_kw(a text[], k text[]) returns int language plpgsql immutable as $$
+declare n int := coalesce(array_length(k, 1), 0); h int; e int;
+begin
+  if n = 0 or coalesce(array_length(a, 1), 0) = 0 then return 0; end if;
+  select count(*) into h from unnest(k) x where exists (select 1 from unnest(a) y where public.clause_tm(x, y));
+  select count(*) into e from unnest(a) y where not exists (select 1 from unnest(k) x where public.clause_tm(x, y));
+  if h = n and e = 0 then return 2; end if;
+  return case when h * 3 >= n * 2 and (e = 0 or (h = n and e * 4 < n)) then 1 else 0 end;
+end $$;
+-- p = '2': jawaban nomor (harus sama). p = '1': jawaban judul, berurutan:
+--   1) sama dengan judul Indonesia (t1) atau Inggris (e1); salah bila persis judul klausul lain; lalu salah ketik kecil (jarak edit ≤ 15%);
+--   2) pencocokan regex kata kunci (kw = kata kunci tiap judul, dihitung dari rx); cocok sebagian dianggap salah
+--      bila jawabannya persis judul klausul lain (mis. "Audit Internal" untuk 9.2.2 Program Audit Internal).
+-- k = kunci bank klausul (grading_config). Koreksi trainer (manual_scores) menimpa hasil ini di my_result.
+drop function if exists public.clause_ok(text, text, text);
+create or replace function public.clause_ok(p text, ref text, v text, k jsonb) returns boolean language plpgsql immutable as $$
+declare a text; t text; at text[]; o jsonb; best int := 0;
+begin
+  if p = '2' then a := public.clause_nn(v); return a <> '' and a = public.clause_nn(k -> 't2' ->> ref); end if;
+  a := public.clause_nt(v);
   if a = '' then return false; end if;
-  return a = b or public.lev(a, b) * 100 <= 15 * greatest(char_length(a), char_length(b));
+  if a in (public.clause_nt(k -> 't1' ->> ref), public.clause_nt(k -> 'e1' ->> ref)) then return true; end if;
+  if exists (select 1 from jsonb_each_text(k -> 't1') e where e.key <> ref
+             and a in (public.clause_nt(e.value), public.clause_nt(k -> 'e1' ->> e.key))) then return false; end if;
+  foreach t in array array_remove(array[k -> 't1' ->> ref, k -> 'e1' ->> ref], null) loop
+    t := public.clause_nt(t);
+    if public.lev(a, t) * 100 <= 15 * greatest(char_length(a), char_length(t)) then return true; end if;
+  end loop;
+  if not (k ? 'rx' and k ? 'kw') then return false; end if;
+  at := public.clause_tok(v, k -> 'rx');
+  for o in select value from jsonb_array_elements(coalesce(k -> 'kw' -> ref, '[]'::jsonb)) loop
+    best := greatest(best, public.clause_kw(at, array(select jsonb_array_elements_text(o))));
+  end loop;
+  if best <> 1 then return best = 2; end if;
+  return not exists (
+    select 1 from jsonb_each(k -> 'kw') e, jsonb_array_elements(e.value) o2
+    where e.key <> ref and o2 = to_jsonb(at)
+      and not exists (select 1 from jsonb_array_elements(coalesce(k -> 'kw' -> ref, '[]'::jsonb)) s where s = o2));
 end $$;
 -- Klausul yang masuk cakupan pengaturan (c.scope = klausul utama, c.lv = tingkat 1/2/3)
 create or replace function public.clause_pool(k jsonb, c jsonb) returns setof text language sql stable as $$
@@ -240,12 +291,12 @@ begin
   if k ? 't1' then
     -- hafalan klausul: soal sesuai undian peserta, nomor soal 1..n berurutan (jenis 1 lalu jenis 2); koreksi trainer di manual_scores
     kind := 'clause'; d := coalesce(a.settings -> 'draw', '{}'::jsonb); n1 := jsonb_array_length(coalesce(d -> 'p1', '[]'::jsonb));
-    select count(*), count(*) filter (where case when q.ov in ('0', '1') then q.ov = '1' else public.clause_ok(q.p, q.key, q.v) end)
+    select count(*), count(*) filter (where case when q.ov in ('0', '1') then q.ov = '1' else public.clause_ok(q.p, q.ref, q.v, k) end)
       into n, r from (
-        select '1' p, x.ref, k -> 't1' ->> x.ref key, a.answers -> 'txt' ->> x.i::text v, a.manual_scores ->> ('1:' || x.ref) ov
+        select '1' p, x.ref, a.answers -> 'txt' ->> x.i::text v, a.manual_scores ->> ('1:' || x.ref) ov
         from jsonb_array_elements_text(coalesce(d -> 'p1', '[]'::jsonb)) with ordinality x(ref, i)
         union all
-        select '2', y.ref, k -> 't2' ->> y.ref, a.answers -> 'txt' ->> (y.i + n1)::text, a.manual_scores ->> ('2:' || y.ref)
+        select '2', y.ref, a.answers -> 'txt' ->> (y.i + n1)::text, a.manual_scores ->> ('2:' || y.ref)
         from jsonb_array_elements_text(coalesce(d -> 'p2', '[]'::jsonb)) with ordinality y(ref, i)
       ) q;
     if n = 0 then return null; end if;

@@ -19,7 +19,8 @@ const OPTS = [
 ];
 const DEF = { shuffle_q: false, shuffle_opt: true, show_score: false, require_all: false, pass_mark: 70 };
 const OPT_LABEL = { shuffle_q: "Acak soal", shuffle_opt: "Acak pilihan", show_score: "Nilai ditampilkan", require_all: "Wajib jawab semua" };
-const MC_ONLY = ["shuffle_q", "shuffle_opt"];                 // tidak berlaku untuk bank hafalan klausul
+const MC_ONLY = ["shuffle_q", "shuffle_opt"];                 // tidak berlaku untuk bank hafalan klausul & bank esai
+const noMc = bk => !!bk && (bk.kind === "clause" || !!bk.essay);
 // Nilai akhir setelah remidi (sama dengan fungsi my_result di database). Nilai sebelumnya selalu di bawah KKM.
 const RULES = {
   kkm: ["Tertinggi, remidi maksimal KKM", "Nilai remidi dibatasi setinggi KKM; bila lebih rendah dari nilai sebelumnya, nilai sebelumnya yang dipakai. Aturan remidi yang umum."],
@@ -46,7 +47,7 @@ async function enter(email) {
   // kunci jawaban semua bank soal (satu baris per bank di grading_config); hanya admin yang dapat membacanya
   const { data } = await sb.from("grading_config").select("id,config");
   if (!data || !data.length) { await sb.auth.signOut(); view("vLogin"); $("#lErr").textContent = "Akun ini bukan admin, atau skema database belum dijalankan."; return; }
-  CFGS = {}; data.forEach(r => { if (r.config && r.config.version && (r.config.mc || r.config.t1)) CFGS[r.config.version] = r.config; });
+  CFGS = {}; data.forEach(r => { if (r.config && r.config.version && (r.config.mc || r.config.t1 || r.config.essay)) CFGS[r.config.version] = r.config; });
   if (CFGS[CLV] && BANKS[CLV]) BANKS[CLV].codes = Object.fromEntries(Object.entries(CFGS[CLV].t1).filter(([k]) => !k.includes(".")).map(([k, t]) => [k, `${k} · ${t}`]));
   if (!CFGS[B100.version]) { await sb.auth.signOut(); view("vLogin"); $("#lErr").textContent = "Kunci jawaban bank 100 soal belum sesuai. Jalankan supabase/update_questions.sql di Supabase → SQL Editor, lalu login ulang."; return; }
   const probe = await sb.from("batches").select("settings,open_from,open_until").limit(1);
@@ -60,6 +61,10 @@ $("#bRef").onclick = load;
 $("#qs").oninput = $("#sort").onchange = () => renderList();
 $("#fs").onclick = e => { const b = e.target.closest("button"); if (!b) return; fsv = b.dataset.v; $$("#fs button").forEach(x => x.classList.toggle("on", x === b)); renderList(); };
 $("#fb").onchange = e => setBf(e.target.value);
+// dropdown panjang diberi kolom pencarian (assets/combo.js); <select> asli tetap dipakai sebagai sumber nilai
+window.searchSelect($("#fb"), { placeholder: "Cari Copart, training, batch, atau kode", minWidth: 340 });
+window.searchSelect($("#bnTrn"), { placeholder: "Cari training atau Copart", empty: "Pilih training" });
+window.searchSelect($("#bnBank"), { placeholder: "Cari bank soal" });
 
 // ---- navigasi berbasis URL: #/peserta, #/peserta/<id>, #/training, #/training/<id copart>, #/analisis (+ ?batch=<filter>) ----
 // Tombol Back/Forward browser, refresh, dan tautan langsung ke halaman/peserta tetap berfungsi.
@@ -225,6 +230,16 @@ function calcRaw(a, ms) {
     const N = bk.items.length, total = N ? Math.round(right * 1000 / N) / 10 : 0;
     return { bk, cf, total, right, N, comp, parts, pmax, res, pm, final: scored(a), clause: true };
   }
+  if (bk.essay) {
+    // bank esai (Training IMS): semua soal dinilai trainer dengan rubrik; nilai = total skor / skor maksimum × 100
+    ms = ms || a.manual_scores || {};
+    const parts = {}, pmax = {}; let got = 0, max = 0;
+    Object.keys(bk.parts).forEach(k => { parts[k] = 0; pmax[k] = 0; });
+    cf.manual.forEach(m => { const v = Number(ms[m.id]) || 0; parts[m.sec] = (parts[m.sec] || 0) + v; pmax[m.sec] = (pmax[m.sec] || 0) + m.max; got += v; max += m.max; });
+    const done = cf.manual.filter(m => ms[m.id] !== undefined && ms[m.id] !== "").length, need = cf.manual.length;
+    const total = max ? Math.round(got * 1000 / max) / 10 : 0;
+    return { bk, cf, total, right: got, N: max, got, max, comp, parts, pmax, done, need, auto: 0, pm, final: a.status === "graded", essay: true };
+  }
   const N = Object.keys(cf.mc).length, pts = bk.manual ? 2 : 1;
   for (const [n, k] of Object.entries(cf.mc)) {
     const ok = String(mc[n] || "").toUpperCase() === k, c = (cf.comp || {})[n] || "—";
@@ -271,7 +286,7 @@ function renderList() {
     let score = "—";
     if (scored(r) && legacy) score = `<span class="mut small">Soal versi lama</span>`;
     else if (c && scored(r) && c.final) score = `<b>${c.total}</b><span class="mut small"> /100</span> ${passBadge(c)}<div class="xs mut">${c.cat}</div>${r.remedial ? `<div class="xs mut">${esc(remNote(r, c))}</div>` : ""}`;
-    else if (c && scored(r) && c.need) score = `<span class="small">Menunggu penilaian</span><div class="xs mut">otomatis ${c.auto}/55 · rubrik ${c.done}/${c.need}</div>`;
+    else if (c && scored(r) && c.need) score = `<span class="small">Menunggu penilaian</span><div class="xs mut">${c.essay ? "" : `otomatis ${c.auto}/55 · `}rubrik ${c.done}/${c.need}</div>`;
     else if (!scored(r) && r.remedial) score = `<span class="xs mut">sebelum remidi ${prevFinal(r)}</span>`;
     const wait = r.status === "remedial";
     return `<tr class="cl" data-id="${r.id}"><td><a class="b rowlink" href="${href("list", r.id)}">${esc(r.name)}</a><div class="mut small">${esc(r.job_title)}${r.copart ? " · " + esc(r.copart) : ""}${multi && bk ? " · " + esc(bk.short) : ""}</div>
@@ -342,7 +357,7 @@ function batchCard(b, title, meta) {
   const spec = [bk.label, `${b.duration_minutes || bk.minutes} menit`];
   if (hasSettings) {
     spec.push(`lulus ≥ ${num(s.pass_mark) ?? 70}`);
-    Object.entries(OPT_LABEL).forEach(([k, t]) => s[k] && !(bk.kind === "clause" && MC_ONLY.includes(k)) && spec.push(t.toLowerCase()));
+    Object.entries(OPT_LABEL).forEach(([k, t]) => s[k] && !(noMc(bk) && MC_ONLY.includes(k)) && spec.push(t.toLowerCase()));
   }
   const sched = (hasSettings && (b.open_from || b.open_until) ? `<div class="specs">Jadwal: ${b.open_from ? fmtD(b.open_from) : "…"} – ${b.open_until ? fmtD(b.open_until) : "…"}</div>` : "")
     + (bk.kind === "clause" ? `<div class="specs">${esc(clSpec(s))}</div>` : "");
@@ -359,7 +374,7 @@ function batchCard(b, title, meta) {
 }
 function renderBatches() {
   $("#bWarn").innerHTML = (hasSettings ? "" : `<div class="alert"><b>Pengaturan ujian belum aktif.</b> Jalankan <code>supabase/settings.sql</code> di Supabase → SQL Editor untuk mengaktifkan pilihan bank soal, jadwal, pengacakan, nilai lulus, dan tampilkan nilai. Setelah itu muat ulang halaman ini.</div>`)
-    + (hasSettings && BANKS[MIX] && !CFGS[MIX] ? `<div class="alert"><b>Bank 50 soal campuran belum aktif.</b> Jalankan <code>supabase/bank_mix50.sql</code> di Supabase → SQL Editor, lalu muat ulang halaman ini.</div>` : "")
+    + (hasSettings ? Object.values(BANKS).filter(x => !CFGS[x.version]).map(x => `<div class="alert"><b>Bank ${esc(x.label)} belum aktif.</b> Jalankan <code>${esc(x.sql || "SQL bank soal")}</code> di Supabase → SQL Editor, lalu muat ulang halaman ini.</div>`).join("") : "")
     + (hasTraining ? "" : `<div class="alert"><b>Copart &amp; Training belum aktif.</b> Jalankan <code>supabase/training.sql</code> di Supabase → SQL Editor (setelah settings.sql), lalu muat ulang halaman ini. Sementara itu batch dibuat seperti sebelumnya.</div>`);
   const c = hasTraining && route.id && cOf(route.id);
   if (c) return renderCopart(c);
@@ -461,9 +476,9 @@ const syncBankHint = () => {
   $("#bnBankHint").textContent = `${n} soal${isClBank() ? " per peserta" : ""} · ${bk.desc}`;
 };
 function showClause() {                              // pengaturan khusus bank klausul; acak soal/pilihan hanya untuk pilihan ganda
-  const on = isClBank();
+  const on = isClBank(), nm = noMc(BANKS[$("#bnBank").value]);
   $("#clSec").hidden = !on;
-  MC_ONLY.forEach(k => $(`#toggles [data-o="${k}"]`).hidden = on);
+  MC_ONLY.forEach(k => $(`#toggles [data-o="${k}"]`).hidden = nm);
   syncBankHint();
 }
 $("#bnBank").onchange = () => {                     // durasi bawaan mengikuti bank soal bila belum diubah
@@ -539,8 +554,7 @@ function openBatch(b, dup, tid) {
   $("#mbTitle").textContent = dup ? "Duplikat Batch" : b ? "Pengaturan Batch" : "Batch Baru";
   $("#mbSub").textContent = dup ? `Salinan pengaturan dari ${bPath(b)} · kode ${b.code}. Kode baru dibuat otomatis; peserta tidak ikut disalin.` : b ? `${bPath(b)} · kode ${b.code}`
     : (t0 ? `${(cOf(t0.copart_id) || {}).name} · ${t0.name} · ` : "") + "Kode 6 angka dibuat otomatis.";
-  const need = x => x.version === MIX ? "supabase/bank_mix50.sql" : x.version === CLV ? "supabase/bank_klausul.sql" : "SQL bank soal";
-  $("#bnBank").innerHTML = Object.values(BANKS).map(x => `<option value="${x.version}" ${!CFGS[x.version] ? "disabled" : ""}>${esc(x.label)}${!CFGS[x.version] ? " — jalankan " + need(x) : ""}</option>`).join("");
+  $("#bnBank").innerHTML = Object.values(BANKS).map(x => `<option value="${x.version}" ${!CFGS[x.version] ? "disabled" : ""}>${esc(x.label)}${!CFGS[x.version] ? ` (jalankan ${esc(x.sql || "SQL bank soal")})` : ""}</option>`).join("");
   $("#bnBank").value = bk.version; $("#bnBank").disabled = !hasSettings;
   $("#bnName").value = !hasTraining ? (b ? b.copart : "") : b ? bName(b) : t0 ? `Test ${tBatches(t0).length + 1}` : "";
   $("#bnNote").value = b ? b.note || "" : "";
@@ -748,19 +762,24 @@ function openDet(id, keep) {
   cur = { a, filter: same ? cur.filter : "all", tab: same ? cur.tab : "A", draft: same && cur.draft ? cur.draft : Object.assign({}, a.manual_scores || {}) };
   $("#vList").hidden = true; $("#vDet").hidden = false; if (!keep) window.scrollTo(0, 0);
   const bk = bankOfA(a) || B100, lock = a.status === "in_progress", wait = a.status === "remedial", legacy = scored(a) && !isCur(a), c = calc(a, cur.draft), ev = evOf(a), fl = flOf(a), s = a.settings || {};
+  if (bk.manual && bk.parts && !bk.parts[cur.tab]) cur.tab = Object.keys(bk.parts)[0];
   const dur = a.duration_minutes || bk.minutes, end = new Date(new Date(a.started_at).getTime() + dur * 60000), [stT, stC] = stLabel(a), h = hist(a);
   let cards = "";
   if (wait) { const x = h[h.length - 1] || {}; cards = stat("Remidi", `ke-${a.remedial}`, "peserta belum mulai", true) + stat("Kode remidi", `<span class="code">${esc(a.remedial_token || "—")}</span>`, "berlaku sampai peserta mulai")
       + stat("Nilai sebelumnya", x.final ?? x.score ?? "—", x.pass ? "lulus" : "belum lulus") + stat("KKM", passMark(a), RULES[remRule(a)][0]); }
   else if (lock) cards = stat("Terjawab", `${a.answered_count || 0}<small> /${bk.total}</small>`, Math.round((a.answered_count || 0) / bk.total * 100) + "% selesai", true) + stat("Sisa waktu", `${leftMin(a)}<small> mnt</small>`, "berakhir " + end.toLocaleTimeString("id-ID", { hour: "2-digit", minute: "2-digit" }))
       + stat("Ragu-ragu", fl.length, "soal ditandai") + stat("Pelanggaran", viol(ev), viol(ev) ? "keluar halaman / layar penuh" : "tidak ada");
+  else if (c && c.essay) cards = stat("Nilai", c.final ? `${c.total}<small> /100</small>` : `${c.total}<small> sementara</small>`, c.final ? c.cat + (c.raw !== c.total ? ` · nilai remidi ${c.raw}` : "") : "menunggu penilaian rubrik", true)
+      + stat("Skor rubrik", `${c.got}<small> /${c.max}</small>`, `${a.answered_count || 0} dari ${bk.total} soal dijawab`)
+      + stat("Penilaian rubrik", `${c.done}<small> /${c.need}</small>`, c.done === c.need ? "lengkap" : "soal belum dinilai")
+      + stat("Kelulusan", c.final ? (c.pass ? "Lulus" : "Belum lulus") : "-", `nilai lulus ${c.pm}`);
   else if (c && bk.manual) cards = stat("Nilai", c.final ? `${c.total}<small> /100</small>` : `${c.total}<small> sementara</small>`, c.final ? c.cat : "menunggu penilaian rubrik", true)
       + stat("Dinilai otomatis", `${c.auto}<small> /55</small>`, `${c.right} dari ${c.N} PG benar · ${c.tfr}/5 B/S`)
       + stat("Penilaian rubrik", `${c.done}<small> /${c.need}</small>`, c.done === c.need ? "lengkap" : "item belum dinilai")
       + stat("Kelulusan", c.final ? (c.pass ? "Lulus" : "Belum lulus") : "—", `nilai lulus ${c.pm}`);
   else if (c) cards = stat("Nilai", `${c.total}<small> /100</small>`, c.cat + (c.raw !== c.total ? ` · nilai remidi ${c.raw}` : ""), true) + stat("Jawaban benar", `${c.right}<small> /${c.N}</small>`, `${a.answered_count || 0} dari ${bk.total} terjawab`)
       + stat("Kelulusan", c.pass ? "Lulus" : "Belum lulus", `nilai lulus ${c.pm}`) + stat("Durasi", mins(a) !== null ? mins(a) + "<small> mnt</small>" : "—", `dari ${dur} menit`);
-  const rules = [bk.label, ...Object.entries(OPT_LABEL).filter(([k]) => s[k] && !(bk.kind === "clause" && MC_ONLY.includes(k))).map(([, t]) => t), bk.kind === "clause" ? clSpec(s) : ""].filter(Boolean).join(" · ");
+  const rules = [bk.label, ...Object.entries(OPT_LABEL).filter(([k]) => s[k] && !(noMc(bk) && MC_ONLY.includes(k))).map(([, t]) => t), bk.kind === "clause" ? clSpec(s) : ""].filter(Boolean).join(" · ");
   const remPanel = wait ? `<div class="panel"><h3>Remidi ke-${a.remedial}</h3><p class="small mut" style="margin:0 0 12px">Bagikan kode atau tautan ini. Peserta juga dapat memulai remidi dari perangkat yang sama tanpa kode.</p>
         <div class="ctrl"><span class="code">${esc(a.remedial_token || "—")}</span><button class="btn ghost sm" id="bRemCp">Salin kode</button><button class="btn ghost sm" id="bRemLk">Salin tautan</button></div>
         <label class="f">Batalkan remidi</label><button class="btn danger sm" id="bRemCx">Batalkan &amp; pulihkan nilai sebelumnya</button><div class="small" id="ctlMsg"></div></div>`
@@ -773,7 +792,7 @@ function openDet(id, keep) {
     <div class="dhead"><div><h1>${esc(a.name)}</h1><p class="mut" style="margin:4px 0 0">${esc(a.job_title)}${a.copart ? " · " + esc(a.copart) : ""}${a.batch_id ? " · batch " + esc(bcode(a.batch_id)) : ""}</p></div>
       <span class="badge ${stC}">${stT}</span></div>
     ${legacy ? `<div class="alert"><b>Soal versi lama.</b> Peserta ini mengerjakan bank soal yang tidak dikenal sistem sehingga tidak dapat dinilai. Hapus bila hanya data uji.</div>` : ""}
-    ${!legacy && bk.manual && !cfgOf(bk) ? `<div class="alert">Kunci & rubrik bank 50 soal belum ada di database. Jalankan <code>supabase/bank_mix50.sql</code>.</div>` : ""}
+    ${!legacy && bk.manual && !cfgOf(bk) ? `<div class="alert">Kunci & rubrik bank ${esc(bk.label)} belum ada di database. Jalankan <code>${esc(bk.sql || "SQL bank soal")}</code>.</div>` : ""}
     <div class="dgrid">${cards}</div>
     <div class="two">
       <div class="panel"><h3>Info pengerjaan</h3><dl class="kv">
@@ -802,7 +821,7 @@ function openDet(id, keep) {
       ? `<div class="bar" style="margin-top:28px"><h2 style="margin-right:auto">Jawaban</h2><span class="mut small" id="grSt"></span><div class="seg" id="pf"><button data-v="all">Semua</button><button data-v="wrong">Salah / kosong</button><button data-v="auto">Perlu dicek</button><button data-v="fix">Dikoreksi</button><button data-v="flag">Ragu-ragu</button></div></div>
       <div class="alert info">Penilaian awal otomatis: huruf besar/kecil, tanda baca, dan salah ketik kecil diabaikan; judul juga dicocokkan dengan <b>regex</b> — padanan kata Indonesia/Inggris/singkatan (mis. <i>Customer focus</i>, <i>SMM</i>) dan kata kunci yang cukup mirip. Filter <b>Perlu dicek</b> menampilkan jawaban yang dinilai dari kemiripan. Bila penilaian otomatis kurang sesuai, klik <b>Anggap benar / Anggap salah</b>; koreksi tersimpan otomatis dan nilai diperbarui.</div><div id="pn"></div>`
       : bk.manual
-      ? `<div class="bar" style="margin-top:28px"><h2 style="margin-right:auto">Jawaban &amp; penilaian</h2><span class="mut small" id="grMsg"></span><div class="seg" id="gt">${Object.entries(bk.parts).map(([k, p]) => `<button data-v="${k}">${k} · ${esc(p.name)}</button>`).join("")}</div></div><div id="pn"></div>`
+      ? `<div class="bar" style="margin-top:28px"><h2 style="margin-right:auto">Jawaban &amp; penilaian</h2><span class="mut small" id="grMsg"></span><div class="seg" id="gt">${Object.entries(bk.parts).map(([k, p]) => bk.essay ? `<button data-v="${k}" title="${esc(p.name)}">Kasus ${k}</button>` : `<button data-v="${k}">${k} · ${esc(p.name)}</button>`).join("")}</div></div><div id="pn"></div>`
       : `<div class="bar" style="margin-top:28px"><h2 style="margin-right:auto">Jawaban</h2><div class="seg" id="pf"><button data-v="all">Semua</button><button data-v="wrong">Salah / kosong</button><button data-v="flag">Ragu-ragu</button></div></div>
       ${s.shuffle_opt ? `<div class="alert info">Pilihan jawaban diacak untuk peserta ini. Huruf di tabel mengikuti urutan bank soal (sama dengan kunci).</div>` : ""}<div id="pn"></div>`}
     <div style="display:flex;justify-content:flex-end;margin:24px 0 60px"><button class="btn danger sm" id="bDel">Hapus peserta</button></div>`;
@@ -843,6 +862,13 @@ function summary() {
   const comp = Object.entries(c.comp), weak = comp.filter(([k, v]) => REM[k] && v.got / v.max < 0.6).map(([k]) => REM[k]);
   const pctRow = (label, got, max) => { const pc = max ? Math.round(got / max * 100) : 0; return `<tr><td>${label}</td><td>${got}/${max}</td><td><div class="pb"><div class="pbar ${pc < 60 ? "bad" : pc < 80 ? "" : "ok"}"><i style="width:${pc}%"></i></div><span class="small">${pc}%</span></div></td></tr>`; };
   let parts = "";
+  if (c.essay) {
+    const low = Object.entries(c.bk.parts).filter(([k]) => c.pmax[k] && c.parts[k] / c.pmax[k] < 0.6).map(([k, p]) => `Kasus ${k} (${p.name})`);
+    $("#sum").innerHTML = `<h2 style="margin:28px 0 12px">Rincian per studi kasus</h2><div class="tw"><table><thead><tr><th>Studi kasus</th><th>Skor</th><th>Persentase</th></tr></thead><tbody>${Object.entries(c.bk.parts).map(([k, p]) => pctRow(`Kasus ${k} · ${esc(p.name)}`, c.parts[k], c.pmax[k])).join("")}</tbody></table></div>
+      <p class="small mut" style="margin:10px 2px 0">Total skor rubrik ${c.got}/${c.max} → nilai ${c.total}/100${c.final ? "" : ` · rubrik terisi ${c.done}/${c.need} soal`}</p>
+      ${low.length && c.final ? `<div class="alert"><b>Topik perlu penguatan</b> (skor &lt; 60%): ${low.map(esc).join("; ")}</div>` : ""}`;
+    return;
+  }
   if (c.clause) {
     comp.sort(([x], [y]) => x - y);
     parts = `<h2 style="margin:28px 0 12px">Rincian per jenis</h2><div class="tw"><table><thead><tr><th>Jenis</th><th>Benar</th><th>Persentase</th></tr></thead><tbody>${Object.entries(c.bk.parts).filter(([k]) => c.pmax[k]).map(([k, p]) => pctRow(`Jenis ${k} · ${esc(p.name)}`, c.parts[k], c.pmax[k])).join("")}</tbody></table></div>`;
@@ -931,6 +957,7 @@ function gradePanel() {
   const a = cur.a, bk = bankOfA(a), cf = cfgOf(bk), ans = a.answers || {}, lock = !scored(a), t = cur.tab, fl = flOf(a);
   const fm = n => fl.includes(n) ? `<span class="fmark" title="Ditandai ragu-ragu">R</span>` : "";
   let h = lock ? `<div class="alert info">Peserta masih mengerjakan. Penilaian rubrik dapat dilakukan setelah jawaban dikirim.</div>` : "";
+  if (bk.essay && cf.scale) h += `<div class="alert info"><b>Skala skor per soal</b><ul class="crit" style="margin:6px 0 0">${cf.scale.map(x => `<li>${esc(x)}</li>`).join("")}</ul><div class="xs mut" style="margin-top:6px">Poin di bawah setiap jawaban adalah panduan isi jawaban yang diharapkan, bukan redaksi baku.</div></div>`;
   if (t === "A") h += mcTable(bk.items.filter(it => it.kind === "mc"), cf, 2);
   else if (t === "B") h += bk.items.filter(it => it.kind === "tf").map(({ n, q }) => {
     const v = (ans.tf || {})[n], k = cf.tf[n], m = cf.manual.find(x => x.id === "B" + n), ok = v === k, lb = x => x === "B" ? "Benar" : x === "S" ? "Salah" : "—";
@@ -1021,6 +1048,7 @@ function renderAnal() {
   if (!an.bank) { $("#anal").innerHTML = `<div class="card empty"><h3 style="margin:0 0 6px;color:var(--ink)">Belum ada data</h3><p style="margin:0">Analisis muncul setelah ada peserta yang mengirim jawaban.</p></div>`; return; }
   const bankBar = present.length > 1 ? `<div class="bar"><span class="small mut">Bank soal</span><div class="seg" id="anBank">${present.map(v => `<button data-v="${v}">${esc(BANKS[v].label)}</button>`).join("")}</div></div>` : "";
   if (BANKS[an.bank].kind === "clause") return renderClauseAnal(sub.filter(r => bankOfA(r).version === an.bank), bankBar);
+  if (BANKS[an.bank].essay) return renderEssayAnal(sub.filter(r => bankOfA(r).version === an.bank), bankBar);
   const bk = BANKS[an.bank], cf = cfgOf(bk), fin = sub.filter(r => bankOfA(r).version === an.bank), it = itemStats(fin, bk), byArea = {};
   it.forEach(x => { (byArea[x.comp] = byArea[x.comp] || []).push(x.p); });
   const hard = it.filter(x => x.p < 50).length, easy = it.filter(x => x.p >= 80).length;
@@ -1057,6 +1085,41 @@ function renderAnal() {
   $$("#anSort button").forEach(b => b.classList.toggle("on", b.dataset.v === an.sort));
   $("#anSort").onclick = e => { const b = e.target.closest("button"); if (b) { an.sort = b.dataset.v; renderAnal(); } };
   $("#anArea").onchange = e => { an.area = e.target.value; renderAnal(); };
+}
+
+// ---- analisis bank esai (Training IMS): rata-rata skor rubrik per studi kasus & per soal, dari peserta yang selesai dinilai ----
+function essayStats(graded, bk) {
+  const cf = cfgOf(bk);
+  return cf.manual.map(m => {
+    const v = graded.map(r => Number((r.manual_scores || {})[m.id]) || 0), avg = v.length ? v.reduce((t, x) => t + x, 0) / v.length : 0;
+    return { m, avg, p: m.max ? Math.round(avg / m.max * 100) : 0, low: v.filter(x => x * 2 < m.max).length,
+      blank: graded.filter(r => !String(((r.answers || {}).txt || {})[m.qs[0]] || "").trim()).length, flags: graded.filter(r => m.qs.some(n => flOf(r).includes(n))).length };
+  });
+}
+function renderEssayAnal(fin, bankBar) {
+  const bk = BANKS[an.bank], graded = fin.filter(r => r.status === "graded"), cs = graded.map(a => calc(a)).filter(Boolean), it = essayStats(graded, bk);
+  const avg = cs.length ? (cs.reduce((t, c) => t + c.total, 0) / cs.length).toFixed(1) : "-", pass = cs.filter(c => c.pass).length;
+  const bar = p => `<div class="pb" style="min-width:120px"><div class="pbar ${p < 50 ? "bad" : p < 80 ? "" : "ok"}"><i style="width:${p}%"></i></div><span class="small">${p}%</span></div>`;
+  const areas = Object.entries(bk.parts).map(([k, pt]) => {
+    const got = cs.reduce((t, c) => t + c.parts[k], 0), max = cs.reduce((t, c) => t + c.pmax[k], 0), p = max ? Math.round(got / max * 100) : 0;
+    return `<div class="area"><div class="t"><span>Kasus ${k} · ${esc(pt.name)}</span><span>${max ? p + "%" : "-"}</span></div><div class="pbar ${p < 60 ? "bad" : p < 80 ? "" : "ok"}"><i style="width:${p}%"></i></div><div class="xs mut" style="margin-top:7px">${bk.sections.find(s => s.part === k).items.length} soal</div></div>`;
+  }).join("");
+  let list = an.sort === "hard" ? [...it].sort((a, b) => a.p - b.p || a.m.qs[0] - b.m.qs[0]) : an.sort === "easy" ? [...it].sort((a, b) => b.p - a.p || a.m.qs[0] - b.m.qs[0]) : it;
+  $("#anal").innerHTML = bankBar
+    + `<div class="stats s4">${stat("Peserta", fin.length, esc(bk.label))}${stat("Selesai dinilai", graded.length, fin.length - graded.length ? `${fin.length - graded.length} menunggu penilaian` : "semua sudah dinilai")}${stat("Rata-rata nilai", avg, "dari peserta yang selesai dinilai", true)}${stat("Kelulusan", cs.length ? Math.round(pass / cs.length * 100) + "%" : "-", cs.length ? `${pass} dari ${cs.length} lulus` : "belum ada nilai", true)}</div>`
+    + (graded.length ? `<h2 style="margin:8px 0 12px">Per studi kasus</h2><div class="areas">${areas}</div>
+    <div class="bar"><h2 style="margin-right:auto">Per soal</h2><div class="seg" id="anSort"><button data-v="no">Nomor</button><button data-v="hard">Tersulit</button><button data-v="easy">Termudah</button></div></div>
+    <div class="tw"><table class="qx"><thead><tr><th>No</th><th>Pertanyaan</th><th>Rata-rata skor</th><th>Tingkat</th><th>Catatan</th></tr></thead><tbody>${list.map(x => {
+      const n = x.m.qs[0], [lt, lc] = lvl(x.p);
+      return `<tr><td>${n}</td><td>${esc(bk.item[n].q)}<div class="mut small">Kasus ${esc(x.m.sec)} · ${esc(bk.parts[x.m.sec].name)}</div></td><td class="nw">${x.avg.toFixed(1)} / ${x.m.max}${bar(x.p)}</td><td><span class="lvl ${lc}">${lt}</span></td>
+        <td class="small">${[x.low ? `${x.low} peserta skor &lt; 50%` : "", x.blank ? `${x.blank} tidak dijawab` : "", x.flags ? `${x.flags} ragu-ragu` : ""].filter(Boolean).join(" · ") || `<span class="mut">-</span>`}</td></tr>`;
+    }).join("")}</tbody></table></div>
+    <p class="hint">Dihitung dari peserta yang penilaian rubriknya sudah lengkap. Soal dengan rata-rata rendah dapat menjadi bahan pembahasan ulang di kelas.</p>`
+      : `<div class="card empty">Belum ada peserta yang selesai dinilai. Nilai rubrik setiap peserta di halaman detail peserta.</div>`);
+  $$("#anBank button").forEach(b => b.classList.toggle("on", b.dataset.v === an.bank));
+  if ($("#anBank")) $("#anBank").onclick = e => { const b = e.target.closest("button"); if (b) { an.bank = b.dataset.v; an.area = "all"; renderAnal(); } };
+  $$("#anSort button").forEach(b => b.classList.toggle("on", b.dataset.v === an.sort));
+  if ($("#anSort")) $("#anSort").onclick = e => { const b = e.target.closest("button"); if (b) { an.sort = b.dataset.v; renderAnal(); } };
 }
 
 // ---- analisis hafalan klausul: soal tiap peserta berbeda (hasil undian), jadi dihitung per klausul ----
@@ -1246,6 +1309,30 @@ function exportClause(wb, items, sfx) {             // bank hafalan klausul: soa
   [w1, w2, w4].forEach(w => { head(w); body(w); });
   ["G", "H"].forEach(col => w1.getColumn(col).numFmt = "dd/mm/yyyy hh:mm");
 }
+function exportEssay(wb, bk, items, sfx) {          // bank esai (Training IMS): skor rubrik per studi kasus & per soal
+  const cf = cfgOf(bk), ks = Object.keys(bk.parts);
+  const w1 = wb.addWorksheet("Rekap Nilai" + sfx), w2 = wb.addWorksheet("Detail Jawaban" + sfx), sheets = [w1, w2];
+  const kmax = {}; if (cf) cf.manual.forEach(m => kmax[m.sec] = (kmax[m.sec] || 0) + m.max);
+  const tmax = Object.values(kmax).reduce((t, x) => t + x, 0);
+  cols(w1, [...baseCols, ...ks.map(k => [`Kasus ${k} ${bk.parts[k].name} (/${kmax[k] || 0})`, 14]), [`Skor rubrik (/${tmax})`, 12], ["Nilai (/100)", 12], ["Kategori", 24], ["Nilai lulus", 10], ["Lulus", 12], ["Rubrik terisi", 12], ...monCols]);
+  cols(w2, [["Nama", 24], ["Jabatan", 20], ["Copart", 22], ["No", 6], ["Studi kasus", 26], ["Pertanyaan", 60], ["Jawaban peserta", 70], ["Skor", 8], ["Maks", 8], ["Ragu-ragu", 10]]);
+  items.forEach((a, i) => {
+    const c = scored(a) ? calc(a) : null, fin = c && c.final, ans = a.answers || {}, fl = flOf(a), ms = a.manual_scores || {};
+    w1.addRow([...baseVals(a, i, bk), ...(c ? [...ks.map(k => c.parts[k]), c.got, fin ? c.total : "", fin ? c.cat : "Menunggu penilaian", c.pm, fin ? (c.pass ? "Lulus" : "Belum lulus") : "", `${c.done}/${c.need}`]
+      : [...ks.map(() => ""), "", "", "", passMark(a), "", ""]), ...monVals(a)]);
+    if (!c) return;
+    bk.items.forEach(it => { const m = cf.manual.find(x => x.qs.includes(it.n)), sec = bk.sections[it.sec];
+      w2.addRow([a.name, a.job_title, a.copart || "", it.n, `Kasus ${sec.part} · ${bk.parts[sec.part].name}`, it.q, (ans.txt || {})[it.n] || "", m ? ms[m.id] ?? "" : "", m ? m.max : "", fl.includes(it.n) ? "Ya" : ""]); });
+  });
+  const graded = items.filter(a => a.status === "graded" && isCur(a));
+  if (cf) {
+    const w4 = wb.addWorksheet("Analisis Soal" + sfx); sheets.push(w4);
+    cols(w4, [["No", 6], ["Studi kasus", 26], ["Pertanyaan", 60], ["Rata-rata skor", 12], ["Maks", 8], ["% Skor", 10], ["Tingkat", 10], ["Skor < 50% (peserta)", 14], ["Tidak dijawab", 12], ["Ragu-ragu", 10]]);
+    if (graded.length) essayStats(graded, bk).forEach(x => w4.addRow([x.m.qs[0], `Kasus ${x.m.sec} · ${bk.parts[x.m.sec].name}`, bk.item[x.m.qs[0]].q, Math.round(x.avg * 10) / 10, x.m.max, x.p, lvl(x.p)[0], x.low, x.blank, x.flags]));
+  }
+  sheets.forEach(w => { head(w); body(w); });
+  ["G", "H"].forEach(col => w1.getColumn(col).numFmt = "dd/mm/yyyy hh:mm");
+}
 async function exportXlsx() {
   const wb = new ExcelJS.Workbook(); wb.creator = "Total Quality Training Exam"; wb.created = new Date();
   const list = [...batchRows()].reverse(), groups = {};
@@ -1253,6 +1340,7 @@ async function exportXlsx() {
   const multi = Object.keys(groups).length > 1;
   for (const [ver, items] of Object.entries(groups)) {
     if (BANKS[ver].kind === "clause") { exportClause(wb, items, multi ? ` (${BANKS[ver].short})` : ""); continue; }
+    if (BANKS[ver].essay) { exportEssay(wb, BANKS[ver], items, multi ? ` (${BANKS[ver].short})` : ""); continue; }
     const bk = BANKS[ver], cf = cfgOf(bk), sfx = multi ? ` (${bk.short})` : "";
     const codeMax = {}; if (cf) Object.values(cf.comp || {}).forEach(c => codeMax[c] = (codeMax[c] || 0) + (bk.manual ? 2 : 1));
     const codes = Object.keys(codeMax), w1 = wb.addWorksheet("Rekap Nilai" + sfx), w2 = wb.addWorksheet("Detail Jawaban" + sfx), sheets = [w1, w2];

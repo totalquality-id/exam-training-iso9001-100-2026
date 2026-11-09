@@ -1,12 +1,20 @@
 # Panduan Setup — Total Quality Training Exam (ISO 9001:2026)
 
-Aplikasi statis (HTML/JS) + Supabase. Tidak ada server yang perlu Anda kelola. Satu aplikasi dan satu database melayani **tiga bank soal** yang dipilih per batch:
+Aplikasi statis (HTML/JS) + Supabase. Tidak ada server yang perlu Anda kelola. Satu aplikasi dan satu database melayani **empat bank soal** yang dipilih per batch:
 
 | Bank soal | Isi | Penilaian | Durasi bawaan |
 |---|---|---|---|
 | **100 soal pilihan ganda** | 100 PG dalam 9 area | Otomatis, 1 poin per soal | 90 menit |
 | **50 soal campuran** | A: 25 PG · B: 5 benar/salah + alasan · C: 5 studi kasus · D: kasus terpadu | PG & benar/salah otomatis; alasan dan studi kasus dinilai trainer dengan rubrik | 75 menit |
 | **Hafalan klausul ISO 9001:2026** | Jenis 1: nomor → judul klausul · Jenis 2: judul → nomor (78 klausul, Edisi 6) | Otomatis dengan toleransi salah ketik + regex padanan kata Indonesia/Inggris; trainer dapat mengoreksi per soal | 60 menit |
+| **Training IMS** | 7 studi kasus × 3 soal esai (5S, Kaizen, Lean waste, VAA/NVAA, gap kompetensi, KSA, talent management) | Seluruhnya dinilai trainer dengan rubrik 0 sampai 4 per soal; nilai = total skor / 84 × 100 | 90 menit |
+
+## Menambahkan bank Training IMS (instalasi yang sudah berjalan)
+1. Supabase → **SQL Editor** → jalankan `supabase/bank_ims.sql` (rubrik bank IMS di baris keempat `grading_config` + pembaruan fungsi `my_result` untuk bank esai). Aman dijalankan ulang; tidak perlu menjalankan ulang `settings.sql`/`training.sql`.
+2. Deploy ulang situs, lalu login ulang di `admin.html`. **Batch Baru → Bank soal** kini berisi pilihan **Training IMS (7 studi kasus, esai)**.
+3. Peserta mengerjakan seperti bank 50 soal (satu studi kasus per halaman). Setelah dikirim, statusnya **Perlu dinilai**; buka detail peserta → **Jawaban & penilaian** → tab **Kasus 1** sampai **Kasus 7**, lalu pilih skor 0 sampai 4 untuk tiap soal. Poin jawaban yang diharapkan ditampilkan di bawah setiap jawaban sebagai panduan. Rubrik dapat diubah di `supabase/bank_ims.sql` (lalu jalankan ulang).
+
+> Dropdown Filter, Training (form batch), dan Bank soal kini memiliki kolom pencarian: ketik nama Copart, training, batch, atau kode 6 angka.
 
 ## Untuk instalasi yang sudah berjalan — yang perlu dilakukan sekarang
 Jalankan di Supabase → **SQL Editor** (semua aman dijalankan ulang; data peserta & batch tidak dihapus):
@@ -31,6 +39,8 @@ Setelah itu, **Batch Baru → Bank soal** menampilkan ketiga pilihan. Bank yang 
 | `assets/questions.js` | Bank soal 100 pilihan ganda (tanpa kunci) |
 | `assets/questions-mix50.js` | Bank soal 50 soal campuran (tanpa kunci & rubrik) |
 | `assets/questions-klausul.js` | Bank hafalan klausul: daftar nomor & daftar judul ber-ID acak (tanpa pasangan kunci) |
+| `assets/questions-ims.js` | Bank Training IMS: 7 studi kasus, 21 soal esai (tanpa rubrik) |
+| `assets/combo.js` | Dropdown dengan pencarian untuk daftar yang panjang di konsol trainer |
 | `assets/banks.js` | Daftar bank soal; menyeragamkan struktur semua bank untuk halaman peserta & admin, termasuk penilaian klausul |
 | `assets/icons.js` | Ikon yang dipakai halaman peserta & admin |
 | `assets/logo.png` | **Logo Anda** (lihat bagian Logo) |
@@ -41,6 +51,7 @@ Setelah itu, **Batch Baru → Bank soal** menampilkan ketiga pilihan. Bank yang 
 | `supabase/settings.sql` | Pengaturan ujian per batch (bank soal, jadwal, acak soal/pilihan, nilai lulus, tampilkan nilai, wajib jawab semua), undian soal klausul, dan remidi |
 | `supabase/bank_mix50.sql` | Kunci jawaban & rubrik bank 50 soal campuran |
 | `supabase/bank_klausul.sql` | Kunci bank hafalan klausul (pasangan nomor ↔ judul) |
+| `supabase/bank_ims.sql` | Rubrik bank Training IMS + fungsi `my_result` untuk bank esai |
 | `supabase/update_questions.sql` | Mengganti kunci bank 100 soal (untuk instalasi lama) |
 
 ## Instalasi baru
@@ -55,8 +66,8 @@ Setelah itu, **Batch Baru → Bank soal** menampilkan ketiga pilihan. Bank yang 
 ### Langkah 3 — Jalankan SQL (urut)
 1. Buka `supabase/schema.sql`, pastikan email admin di bagian `insert into public.admins` sama dengan email dari Langkah 2.
 2. Supabase → **SQL Editor → New query** → tempel seluruh isi file → **Run**. Harus muncul "Success".
-3. Jalankan dengan cara yang sama, berurutan: `supabase/batch.sql` → `supabase/settings.sql` → `supabase/bank_mix50.sql` → `supabase/bank_klausul.sql` → `supabase/training.sql`.
-4. Cek di **Table Editor**: ada tabel `attempts`, `batches`, `coparts`, `trainings`, `grading_config` (3 baris), `admins`.
+3. Jalankan dengan cara yang sama, berurutan: `supabase/batch.sql` → `supabase/settings.sql` → `supabase/bank_mix50.sql` → `supabase/bank_klausul.sql` → `supabase/training.sql` → `supabase/bank_ims.sql`.
+4. Cek di **Table Editor**: ada tabel `attempts`, `batches`, `coparts`, `trainings`, `grading_config` (4 baris), `admins`.
 
 > Kunci jawaban, pembahasan, dan rubrik tersimpan di tabel `grading_config` dan hanya bisa dibaca akun admin. Peserta tidak dapat melihatnya lewat browser.
 

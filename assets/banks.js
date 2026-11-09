@@ -12,7 +12,7 @@ const finish = b => {
 const A = window.EXAM;                    // 100 soal pilihan ganda, dinilai otomatis
 finish({
   version: A.version, key: "qb100", manual: false, minutes: A.minutes,
-  label: "100 soal pilihan ganda", short: "100 PG", desc: "Dinilai otomatis, 1 poin per soal.",
+  label: "100 soal pilihan ganda", short: "100 PG", desc: "Dinilai otomatis, 1 poin per soal.", sql: "supabase/update_questions.sql",
   codes: A.codes,
   sections: A.areas.map(ar => ({ name: ar.name, short: ar.short, code: ar.code,
     items: A.mc.filter(([n]) => n >= ar.from && n <= ar.to).map(([n, q, o]) => ({ n, kind: "mc", q, o })) })),
@@ -21,7 +21,7 @@ finish({
 const M = window.EXAM_MIX50;              // 50 soal campuran, sebagian dinilai manual dengan rubrik
 if (M) finish({
   version: M.version, key: "mix50", manual: true, minutes: M.minutes,
-  label: "50 soal campuran (PG, benar/salah, studi kasus)", short: "50 campuran", desc: "PG & benar/salah dinilai otomatis; alasan dan studi kasus dinilai trainer dengan rubrik.",
+  label: "50 soal campuran (PG, benar/salah, studi kasus)", short: "50 campuran", desc: "PG & benar/salah dinilai otomatis; alasan dan studi kasus dinilai trainer dengan rubrik.", sql: "supabase/bank_mix50.sql",
   codes: { FND: "Fundamental", CTX: "Context", LDR: "Leadership", "R&O": "Risk & Opportunity", SUP: "Support", OPS: "Operation", PER: "Performance Evaluation", IMP: "Improvement" },
   parts: { A: { name: "Multiple Choice", max: 50 }, B: { name: "True/False + Reasoning", max: 10 }, C: { name: "Case Analysis", max: 20 }, D: { name: "Integrated Transition Case", max: 20 } },
   sections: [
@@ -52,7 +52,7 @@ if (K) {
                  2: { name: "Jenis 2 · Judul → Nomor", intro: "Tuliskan nomor klausul untuk setiap judul, misalnya 7.1.4. Untuk judul yang muncul di beberapa klausul, induk klausulnya ditampilkan sebagai petunjuk." } };
   const base = {
     version: K.version, key: "klausul", kind: "clause", manual: false, minutes: K.minutes,
-    label: "Hafalan klausul ISO 9001:2026", short: "Klausul", desc: "Jenis 1: nomor → judul klausul · Jenis 2: judul → nomor. Dinilai otomatis (toleransi salah ketik + regex padanan kata Indonesia/Inggris); trainer dapat mengoreksi per soal.",
+    label: "Hafalan klausul ISO 9001:2026", short: "Klausul", desc: "Jenis 1: nomor → judul klausul · Jenis 2: judul → nomor. Dinilai otomatis (toleransi salah ketik + regex padanan kata Indonesia/Inggris); trainer dapat mengoreksi per soal.", sql: "supabase/bank_klausul.sql",
     parts: { 1: { name: "Nomor → Judul" }, 2: { name: "Judul → Nomor" } },
     sections: [], items: [], item: {}, total: K.nums.length * 2, codes: {},
   };
@@ -150,6 +150,20 @@ window.clauseGrade = (part, ref, v, cf) => {
   memo.set(id, g); return g;
 };
 window.clauseCfg = { DEF: CL_DEF, clOf, clCount, clPool };
+
+// Training IMS: 7 studi kasus × 3 soal esai; seluruhnya dinilai trainer dengan rubrik (grading_config id = 4, essay: true).
+// Bagian = studi kasus (part "1".."7"); nilai = total skor rubrik / skor maksimum × 100.
+const I = window.EXAM_IMS;
+if (I) finish({
+  version: I.version, key: "ims", manual: true, essay: true, minutes: I.minutes,
+  label: "Training IMS (7 studi kasus, esai)", short: "IMS", sql: "supabase/bank_ims.sql",
+  desc: "21 soal esai dalam 7 studi kasus (5S, Kaizen, Lean, kompetensi, talent management). Seluruhnya dinilai trainer dengan rubrik.",
+  codes: {},
+  parts: Object.fromEntries(I.cases.map((c, i) => [String(i + 1), { name: c.title }])),
+  sections: I.cases.map((c, i) => ({ name: `Kasus ${i + 1}: ${c.title}`, short: `${i + 1} · ${c.title}`, part: String(i + 1), scenario: c.scenario,
+    intro: "Jawablah setiap pertanyaan berdasarkan kasus berikut. Yang dinilai adalah ketepatan pemahaman dan penerapan, bukan redaksi baku.",
+    items: c.qs.map(([n, q]) => ({ n, kind: "essay", q })) })),
+});
 
 window.BANKS = B;
 window.BANK_DEFAULT = A.version;

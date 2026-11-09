@@ -458,10 +458,11 @@ async function loadResult() {
     if (error || !data) return;
     if (data.pending) { $("#doneMsg").textContent = "Terima kasih. Sebagian jawaban Anda dinilai oleh trainer; nilai akan tampil di halaman ini setelah penilaian selesai."; return; }
     const pass = data.score >= data.pass_mark, what = data.kind === "clause" ? "soal klausul" : "pilihan ganda";
+    const detail = data.kind === "essay" ? `skor rubrik ${data.right} dari ${data.total}` : `${data.right} dari ${data.total} ${what} benar`;
     const rem = data.remedial ? ` · remidi ke-${data.remedial}${data.raw !== undefined && +data.raw !== +data.score ? ` (nilai remidi ${data.raw})` : ""}` : "";
     $("#doneMsg").textContent = data.manual ? "Terima kasih. Penilaian jawaban Anda telah selesai." : "Terima kasih. Jawaban Anda telah diterima dan dinilai otomatis.";
     $("#result").innerHTML = `<div class="result"><div class="score"><div class="big">${data.score}<small> /100</small></div>
-      <div><div class="b">${esc(cat(data.score))}</div><div class="small mut">${data.right} dari ${data.total} ${what} benar · nilai lulus ${data.pass_mark}${rem}</div>
+      <div><div class="b">${esc(cat(data.score))}</div><div class="small mut">${detail} · nilai lulus ${data.pass_mark}${rem}</div>
       <div style="margin-top:8px"><span class="badge ${pass ? "b-ok" : "b-bad"}">${pass ? "Lulus" : "Belum lulus"}</span></div></div></div></div>`;
   } catch {}
 }

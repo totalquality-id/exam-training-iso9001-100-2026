@@ -273,9 +273,10 @@ grant execute on function public.claim_remedial(text, uuid) to authenticated;
 --      'kkm'  (bawaan) nilai tertinggi, dengan nilai remidi dibatasi maksimal KKM
 --      'best' nilai tertinggi dari semua percobaan
 --      'raw'  nilai remidi terakhir apa adanya
+--    Bank esai (grading_config.essay, mis. Training IMS): nilai = total skor rubrik / skor maksimum × 100, setelah selesai dinilai.
 create or replace function public.my_result(p_attempt uuid) returns json
 language plpgsql stable security definer set search_path = public as $$
-declare a public.attempts; bs jsonb; k jsonb; d jsonb; n int; r int; n1 int; tfr int; man numeric; pm numeric; ver text; show boolean;
+declare a public.attempts; bs jsonb; k jsonb; d jsonb; n int; r int; n1 int; tfr int; man numeric; mx numeric; pm numeric; ver text; show boolean;
   raw numeric; sc numeric; best numeric; kind text := 'mc';
 begin
   select * into a from public.attempts where id = p_attempt and user_id = auth.uid();
@@ -301,6 +302,15 @@ begin
       ) q;
     if n = 0 then return null; end if;
     raw := round(r * 100.0 / n, 1);
+  elsif k ? 'essay' then
+    -- bank esai (Training IMS): seluruh soal dinilai trainer dengan rubrik
+    if a.status <> 'graded' then return json_build_object('pending', true); end if;
+    kind := 'essay';
+    select coalesce(sum(nullif(a.manual_scores ->> (m ->> 'id'), '')::numeric), 0), coalesce(sum((m ->> 'max')::numeric), 0)
+      into man, mx from jsonb_array_elements(k -> 'manual') m;
+    if mx = 0 then return null; end if;
+    r := round(man)::int; n := mx::int;
+    raw := round(man * 100.0 / mx, 1);
   else
     select count(*), count(*) filter (where upper(coalesce(a.answers -> 'mc' ->> e.key, '')) = e.value)
       into n, r from jsonb_each_text(k -> 'mc') e;
@@ -322,7 +332,7 @@ begin
     best := coalesce(best, 0);
     sc := case coalesce(bs ->> 'remedial_rule', 'kkm') when 'raw' then raw when 'best' then greatest(best, raw) else greatest(best, least(raw, pm)) end;
   end if;
-  return json_build_object('right', r, 'total', n, 'score', sc, 'raw', raw, 'pass_mark', pm, 'kind', kind, 'manual', kind = 'manual', 'remedial', a.remedial);
+  return json_build_object('right', r, 'total', n, 'score', sc, 'raw', raw, 'pass_mark', pm, 'kind', kind, 'manual', kind in ('manual', 'essay'), 'remedial', a.remedial);
 end $$;
 revoke execute on function public.my_result(uuid) from public, anon;
 grant execute on function public.my_result(uuid) to authenticated;

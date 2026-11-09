@@ -379,3 +379,37 @@ td.small{white-space:nowrap}
 .ss-o.dis{color:var(--mut-2);cursor:not-allowed}
 .ss-e{padding:18px 12px;text-align:center;color:var(--mut);font-size:13px}
 .ss-f{padding:6px 12px;border-top:1px solid var(--line);font-size:11.5px;color:var(--mut-2)}
+
+/* ---------- editor bank soal (assets/bank-editor.js) ---------- */
+.pat{display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin-top:18px}
+.pat button{display:flex;flex-direction:column;gap:6px;text-align:left;font:inherit;font-size:13px;line-height:1.45;color:var(--ink-2);padding:14px;border:1px solid var(--line-2);border-radius:12px;background:rgba(255,255,255,.6);cursor:pointer;transition:border-color .15s,background .15s}
+.pat button b{font-size:14.5px;color:var(--ink)}.pat button:hover{border-color:rgba(0,71,171,.35)}
+.pat button.on{border-color:var(--brand);background:var(--brand-l);box-shadow:0 0 0 3px rgba(0,71,171,.10)}
+.esec{margin:0 0 16px;padding:22px 24px}
+.esec-h{display:flex;align-items:center;gap:10px;margin-bottom:2px}.esec-h h3{font-size:16px}
+.esec .fgrid.tight{gap:0 12px}
+.eitems{margin-top:16px;display:grid;gap:12px}
+.eitem{border:1px solid var(--line-2);border-radius:12px;background:rgba(255,255,255,.62);padding:14px 16px 16px}
+.eitem-h{display:flex;align-items:center;gap:10px}.eitem-h .qno{font-weight:650;font-size:13.5px}
+.eitem label.f{margin-top:12px}
+.etools{display:flex;gap:4px}
+.ebtn{width:30px;height:30px;display:grid;place-items:center;font:inherit;font-size:15px;line-height:1;border:1px solid var(--line-2);border-radius:8px;background:rgba(255,255,255,.7);color:var(--ink-2);cursor:pointer}
+.ebtn:hover:not(:disabled){background:#fff;border-color:rgba(15,27,51,.24)}.ebtn:disabled{opacity:.35;cursor:default}
+.ebtn.del{color:var(--bad)}.ebtn.del:hover{background:var(--bad-l)}.ebtn .ico{width:15px;height:15px}
+.eopts{display:grid;gap:6px}
+.eopt{display:flex;align-items:center;gap:10px;padding:4px 6px 4px 10px;border:1px solid var(--line);border-radius:10px;background:rgba(255,255,255,.5);cursor:pointer}
+.eopt.on{border-color:rgba(21,115,71,.45);background:var(--ok-l)}
+.eopt input[type=radio]{margin:0;accent-color:var(--ok);width:16px;height:16px;flex:none;cursor:pointer}
+.eopt .k{width:22px;font-weight:650;color:var(--mut);flex:none}.eopt.on .k{color:var(--ok)}
+.eopt input[type=text]{border-color:transparent;background:transparent;padding:7px 8px}.eopt input[type=text]:focus{background:#fff;border-color:var(--brand)}
+.ekey{margin-top:2px}.ekey label{font-size:13px;font-weight:500;color:var(--mut);padding:5px 14px;border-radius:7px;cursor:pointer}
+.ekey label.on{background:rgba(255,255,255,.92);color:var(--ink);font-weight:600;box-shadow:0 1px 2px rgba(15,27,51,.1)}
+.ekey input{position:absolute;opacity:0;pointer-events:none}
+.erub{margin-top:14px;padding:12px 14px 14px;border-radius:10px;background:rgba(240,245,253,.8);border:1px solid rgba(0,71,171,.12)}
+.erub-h{font-size:11px;font-weight:600;letter-spacing:.08em;text-transform:uppercase;color:var(--brand)}
+.erub label.f{margin-top:10px}
+.eadd{display:flex;gap:8px;flex-wrap:wrap;margin-top:14px}.eadd .btn .ico{width:14px;height:14px}
+.ebar{position:sticky;bottom:12px;z-index:20;display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin:22px 0 40px;padding:12px 16px;border-radius:14px;background:var(--glass-solid);border:1px solid rgba(255,255,255,.8);box-shadow:var(--edge),var(--sh-lg);-webkit-backdrop-filter:var(--blur);backdrop-filter:var(--blur)}
+.ebar .small{color:var(--mut)}.ebar .small.no{color:var(--bad)}.ebar .small.ok{color:var(--ok)}
+#pgBank .bad{border-color:var(--bad)!important;box-shadow:0 0 0 3px rgba(180,35,24,.12)!important}
+@media(max-width:720px){.pat{grid-template-columns:1fr}.esec{padding:18px 16px}.eitem{padding:12px}}

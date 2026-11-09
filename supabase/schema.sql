@@ -1,5 +1,5 @@
 -- =====================================================================
--- Final Assessment ISO 9001:2026 — skema Supabase
+-- Final Assessment ISO 9001:2026 - skema Supabase
 -- Jalankan SELURUH isi file ini di Supabase → SQL Editor.
 -- WAJIB: ganti 'GANTI_EMAIL_ADMIN@perusahaan.com' di bawah dengan email admin Anda.
 -- =====================================================================
@@ -15,7 +15,7 @@ language sql stable security definer set search_path = public as $$
      and exists (select 1 from public.admins where email = lower(coalesce(auth.jwt() ->> 'email','')));
 $$;
 
--- 2) Kunci jawaban & pembahasan — 100 soal pilihan ganda (hanya admin yang bisa membaca)
+-- 2) Kunci jawaban & pembahasan - 100 soal pilihan ganda (hanya admin yang bisa membaca)
 create table if not exists public.grading_config (id int primary key, config jsonb not null);
 alter table public.grading_config enable row level security;
 drop policy if exists cfg_select on public.grading_config;
@@ -229,7 +229,7 @@ insert into public.grading_config (id, config) values (1, $cfg${
  },
  "exp": {
   "1": "QMS berorientasi pada pemenuhan persyaratan produk/jasa, customer satisfaction, serta pengelolaan dan improvement.",
-  "2": "Persyaratan utama sistem berada pada Klausul 4–10.",
+  "2": "Persyaratan utama sistem berada pada Klausul 4-10.",
   "3": "PDCA dapat diterapkan pada seluruh proses dan QMS secara keseluruhan.",
   "4": "Risk-based thinking bukan berarti menghilangkan seluruh risiko.",
   "5": "Process approach melihat proses sebagai aktivitas yang saling terkait dan berinteraksi untuk menghasilkan hasil yang dimaksudkan.",

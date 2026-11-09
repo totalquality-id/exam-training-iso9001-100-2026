@@ -1,7 +1,7 @@
 <!DOCTYPE html>
 <html lang="id"><head>
 <meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
-<title>Trainer Console — Total Quality Training Exam</title>
+<title>Trainer Console - Total Quality Training Exam</title>
 <link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
 <link rel="icon" href="assets/logo.png">
@@ -30,6 +30,7 @@
       <a class="sn-i" data-p="list" href="#/peserta"><span>Peserta</span><em id="nList"></em></a>
       <a class="sn-i" data-p="batch" href="#/training"><span>Copart &amp; Training</span><em id="nBatch"></em></a>
       <a class="sn-i" data-p="anal" href="#/analisis"><span>Analisis soal</span></a>
+      <a class="sn-i" data-p="bank" href="#/bank-soal"><span>Bank soal</span><em id="nBank"></em></a>
     </nav>
     <div class="sn-foot">
       <div class="me" id="me"></div>
@@ -52,7 +53,7 @@
         <select id="fCop" aria-label="Filter Copart"></select>
         <div class="seg" id="fs"><button class="on" data-v="all">Semua</button><button data-v="in_progress">Mengerjakan</button><button data-v="grade" hidden>Perlu dinilai</button><button data-v="done">Selesai</button><button data-v="fail" hidden>Belum lulus</button><button data-v="rem" hidden>Remidi</button></div>
         <div class="sp"></div>
-        <select id="sort" aria-label="Urutkan"><option value="new">Terbaru</option><option value="score">Nilai tertinggi</option><option value="low">Nilai terendah</option><option value="name">Nama A–Z</option></select>
+        <select id="sort" aria-label="Urutkan"><option value="new">Terbaru</option><option value="score">Nilai tertinggi</option><option value="low">Nilai terendah</option><option value="name">Nama A-Z</option></select>
       </div>
       <div class="tw"><table><thead><tr><th>Peserta</th><th>Status</th><th>Progres</th><th>Mulai</th><th>Aktivitas terakhir</th><th>Durasi</th><th>Nilai</th></tr></thead><tbody id="tb"></tbody></table></div>
       <div class="xs mut" id="tbFoot" style="margin:10px 2px 60px"></div>
@@ -73,6 +74,8 @@
       <div id="anal"></div>
       <div style="height:60px"></div>
     </section>
+
+    <section id="pgBank" hidden></section>
   </main>
 
   <main class="wrap wide" id="vDet" hidden></main>
@@ -115,6 +118,18 @@
       <div class="alert info" id="mbNote"></div>
       <div class="err" id="bnErr"></div>
       <div class="m-f"><button type="button" class="btn ghost" id="mbNo">Batal</button><button class="btn" id="bnAdd" type="submit">Buat Batch</button></div>
+    </form>
+  </div>
+</div>
+
+<div class="modal" id="mNewBank" hidden>
+  <div class="card lg">
+    <div class="m-h"><div><h2>Bank Soal Baru</h2><p class="mut small" style="margin:2px 0 0">Pilih pola soal. Susunan, cara pengerjaan, dan penilaiannya mengikuti bank yang sudah ada.</p></div><button class="m-x" id="nbX" type="button" aria-label="Tutup"><i data-i="x"></i></button></div>
+    <form id="fNewBank">
+      <div class="pat" id="nbPat"></div>
+      <label class="f" for="nbName">Nama bank soal</label><input id="nbName" type="text" maxlength="120" required placeholder="Post-test ISO 14001:2015">
+      <div class="err" id="nbErr"></div>
+      <div class="m-f"><button type="button" class="btn ghost" id="nbNo">Batal</button><button class="btn" type="submit">Lanjut ke Editor</button></div>
     </form>
   </div>
 </div>
@@ -167,5 +182,5 @@
 
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/exceljs/4.4.0/exceljs.min.js"></script>
-<script src="assets/icons.js"></script><script src="assets/config.js"></script><script src="assets/questions.js"></script><script src="assets/questions-mix50.js"></script><script src="assets/questions-klausul.js"></script><script src="assets/questions-ims.js"></script><script src="assets/banks.js"></script><script src="assets/combo.js"></script><script src="assets/admin.js"></script>
+<script src="assets/icons.js"></script><script src="assets/config.js"></script><script src="assets/questions.js"></script><script src="assets/questions-mix50.js"></script><script src="assets/questions-klausul.js"></script><script src="assets/questions-ims.js"></script><script src="assets/banks.js"></script><script src="assets/combo.js"></script><script src="assets/bank-editor.js"></script><script src="assets/admin.js"></script>
 </body></html>

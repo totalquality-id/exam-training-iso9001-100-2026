@@ -22,10 +22,23 @@ const writeCache = () => { try {
   localStorage.setItem(CK, JSON.stringify({ attempt: { id: attempt.id, user_id: attempt.user_id, name: attempt.name, job_title: attempt.job_title, copart: attempt.copart, batch_id: attempt.batch_id, duration_minutes: attempt.duration_minutes, started_at: attempt.started_at, settings: attempt.settings || {}, remedial: attempt.remedial || 0 }, answers: ans, dirty, pending, done, page }));
 } catch {} };
 
+// ---- bank soal buatan/ubahan admin (tabel question_banks); disalin ke perangkat agar ujian tetap bisa dibuka saat offline ----
+const BK_CACHE = "exam-banks";
+async function loadBanks() {
+  let list = null;
+  try {
+    const res = await Promise.race([sb.from("question_banks").select("version,pattern,label,short,descr,minutes,content,active"), new Promise(r => setTimeout(() => r(null), 6000))]);
+    if (res && !res.error) { list = res.data || []; try { localStorage.setItem(BK_CACHE, JSON.stringify(list)); } catch {} }
+  } catch {}
+  if (!list) { try { list = JSON.parse(localStorage.getItem(BK_CACHE)) || []; } catch { list = []; } }
+  window.registerBanks(list); BK = window.bankOf(S);
+}
+
 async function init() {
   if (!CFG.SUPABASE_URL || CFG.SUPABASE_URL.startsWith("GANTI")) return fatal("Isi SUPABASE_URL dan SUPABASE_ANON_KEY pada assets/config.js.");
   if ("serviceWorker" in navigator) navigator.serviceWorker.register("sw.js").catch(() => {});
   sb = supabase.createClient(CFG.SUPABASE_URL, CFG.SUPABASE_ANON_KEY, { auth: { storageKey: "exam-participant" } });
+  await loadBanks();
   const { data: { session } } = await sb.auth.getSession();
   const c = readCache(), qs = new URLSearchParams(location.search), rq = qs.get("remidi");
   if (session && c && c.attempt && c.attempt.user_id === session.user.id) {          // lanjut dari perangkat ini, tanpa butuh internet
@@ -278,7 +291,7 @@ async function flush() {
   saving = false;
   const already = error && /sudah dikirim/i.test(error.message || "");
   if (error && !already) {
-    setSt(navigator.onLine ? "gagal menyimpan, mencoba lagi…" : "offline — tersimpan di perangkat");
+    setSt(navigator.onLine ? "gagal menyimpan, mencoba lagi…" : "offline - tersimpan di perangkat");
     if (pending) showSending();
     return false;
   }
@@ -323,7 +336,7 @@ function itemHtml(n) {
 }
 function renderPage() {
   const sec = BK.sections[page], ns = order[page], N = BK.sections.length, last = page === N - 1, toLock = !last && blocked(page + 1);
-  let h = `<section><div class="page-h"><div><div class="ey">Bagian ${page + 1} dari ${N}</div><h2>${esc(sec.name)}</h2><p>Soal ${disp[ns[0]]}${ns.length > 1 ? "–" + disp[ns[ns.length - 1]] : ""}</p></div>
+  let h = `<section><div class="page-h"><div><div class="ey">Bagian ${page + 1} dari ${N}</div><h2>${esc(sec.name)}</h2><p>Soal ${disp[ns[0]]}${ns.length > 1 ? "-" + disp[ns[ns.length - 1]] : ""}</p></div>
     <div class="page-prog"><b id="ppC">0</b> / ${ns.length} terjawab<div class="pbar"><i id="ppB" style="width:0"></i></div></div></div>
     ${BK.seq && ans.lk && sec.part === "1" ? `<div class="alert info">Jenis 1 sudah dikunci. Jawaban di halaman ini hanya dapat dilihat.</div>` : ""}
     ${sec.intro ? `<p class="intro">${esc(sec.intro)}</p>` : ""}${sec.scenario ? `<div class="scn"><div class="ey">Kasus</div>${esc(sec.scenario)}</div>` : ""}`;
@@ -458,7 +471,7 @@ async function loadResult() {
     if (error || !data) return;
     if (data.pending) { $("#doneMsg").textContent = "Terima kasih. Sebagian jawaban Anda dinilai oleh trainer; nilai akan tampil di halaman ini setelah penilaian selesai."; return; }
     const pass = data.score >= data.pass_mark, what = data.kind === "clause" ? "soal klausul" : "pilihan ganda";
-    const detail = data.kind === "essay" ? `skor rubrik ${data.right} dari ${data.total}` : `${data.right} dari ${data.total} ${what} benar`;
+    const detail = data.kind === "essay" ? `skor rubrik ${data.right} dari ${data.total}` : data.total ? `${data.right} dari ${data.total} ${what} benar` : "dinilai dengan rubrik";
     const rem = data.remedial ? ` · remidi ke-${data.remedial}${data.raw !== undefined && +data.raw !== +data.score ? ` (nilai remidi ${data.raw})` : ""}` : "";
     $("#doneMsg").textContent = data.manual ? "Terima kasih. Penilaian jawaban Anda telah selesai." : "Terima kasih. Jawaban Anda telah diterima dan dinilai otomatis.";
     $("#result").innerHTML = `<div class="result"><div class="score"><div class="big">${data.score}<small> /100</small></div>

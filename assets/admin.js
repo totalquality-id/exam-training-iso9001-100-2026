@@ -3,8 +3,8 @@ const BANKS = window.BANKS, B100 = BANKS[window.BANK_DEFAULT], MIX = "mix50-2026
 const $ = s => document.querySelector(s), $$ = s => document.querySelectorAll(s);
 const esc = s => String(s ?? "").replace(/[&<>"]/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));
 const view = id => document.querySelectorAll(".view").forEach(v => v.hidden = v.id !== id);
-const REM = { CTX: "Workshop 2 — Context & Climate Relevance Lab", LDR: "Workshop 3 — Quality Culture Challenge", "R&O": "Workshop 4 — Risk & Opportunity War Room", SUP: "Workshop 5 — Knowledge Risk Map", OPS: "Workshop 6 — Customer Promise Challenge" };
-const fmtD = d => d ? new Date(d).toLocaleString("id-ID", { dateStyle: "short", timeStyle: "short" }) : "—";
+const REM = { CTX: "Workshop 2 - Context & Climate Relevance Lab", LDR: "Workshop 3 - Quality Culture Challenge", "R&O": "Workshop 4 - Risk & Opportunity War Room", SUP: "Workshop 5 - Knowledge Risk Map", OPS: "Workshop 6 - Customer Promise Challenge" };
+const fmtD = d => d ? new Date(d).toLocaleString("id-ID", { dateStyle: "short", timeStyle: "short" }) : "-";
 const mins = a => a.submitted_at ? Math.round((new Date(a.submitted_at) - new Date(a.started_at)) / 6000) / 10 : null;
 const num = v => v === null || v === undefined || v === "" || isNaN(+v) ? null : +v;
 const toLocal = d => { if (!d) return ""; const x = new Date(d); x.setMinutes(x.getMinutes() - x.getTimezoneOffset()); return x.toISOString().slice(0, 16); };
@@ -13,7 +13,7 @@ const fromLocal = v => v ? new Date(v).toISOString() : null;
 // Aturan ujian yang dapat diatur per batch. Mode layar penuh, anti-salin, dan pencatatan keluar halaman selalu aktif.
 const OPTS = [
   ["shuffle_q", "Acak urutan soal", "Soal pilihan ganda diacak di dalam tiap bagian, berbeda untuk setiap peserta. Nomor yang tampil tetap berurutan."],
-  ["shuffle_opt", "Acak pilihan jawaban", "Urutan A–D diacak per peserta. Pilihan seperti “Semua benar” tetap di posisinya."],
+  ["shuffle_opt", "Acak pilihan jawaban", "Urutan A-D diacak per peserta. Pilihan seperti “Semua benar” tetap di posisinya."],
   ["show_score", "Tampilkan nilai ke peserta", "Setelah mengirim (atau setelah dinilai trainer untuk bank 50 soal), peserta melihat nilai dan status lulus. Kunci jawaban tidak ditampilkan."],
   ["require_all", "Wajib menjawab semua soal", "Kirim terkunci sampai semua soal terjawab. Saat waktu habis tetap terkirim otomatis."],
 ];
@@ -46,16 +46,25 @@ $("#fLogin").addEventListener("submit", async e => {
 });
 async function enter(email) {
   // kunci jawaban semua bank soal (satu baris per bank di grading_config); hanya admin yang dapat membacanya
-  const { data } = await sb.from("grading_config").select("id,config");
-  if (!data || !data.length) { await sb.auth.signOut(); view("vLogin"); $("#lErr").textContent = "Akun ini bukan admin, atau skema database belum dijalankan."; return; }
-  CFGS = {}; data.forEach(r => { if (r.config && r.config.version && (r.config.mc || r.config.t1 || r.config.essay)) CFGS[r.config.version] = r.config; });
-  if (CFGS[CLV] && BANKS[CLV]) BANKS[CLV].codes = Object.fromEntries(Object.entries(CFGS[CLV].t1).filter(([k]) => !k.includes(".")).map(([k, t]) => [k, `${k} · ${t}`]));
+  if (!(await loadBanks())) { await sb.auth.signOut(); view("vLogin"); $("#lErr").textContent = "Akun ini bukan admin, atau skema database belum dijalankan."; return; }
   if (!CFGS[B100.version]) { await sb.auth.signOut(); view("vLogin"); $("#lErr").textContent = "Kunci jawaban bank 100 soal belum sesuai. Jalankan supabase/update_questions.sql di Supabase → SQL Editor, lalu login ulang."; return; }
   const probe = await sb.from("batches").select("settings,open_from,open_until").limit(1);
   hasSettings = !probe.error;
   hasTraining = !(await sb.from("trainings").select("id").limit(1)).error;
   $("#me").textContent = email;
   view("vApp"); await load(); render(); poll = setInterval(load, 10000);
+}
+// Bank soal: kunci (grading_config) + isi dari database (question_banks: bank buatan admin & teks bawaan yang diubah).
+// Tanpa tabel question_banks (bank_editor.sql belum dijalankan) bank bawaan tetap dipakai seperti biasa.
+let hasBankTable = false;
+async function loadBanks() {
+  const [g, q] = await Promise.all([sb.from("grading_config").select("id,config"), sb.from("question_banks").select("*")]);
+  if (!g.data || !g.data.length) return false;
+  hasBankTable = !q.error;
+  window.registerBanks(q.error ? [] : q.data || []);
+  CFGS = {}; g.data.forEach(r => { if (r.config && r.config.version && (r.config.mc || r.config.t1 || r.config.essay || r.config.manual)) CFGS[r.config.version] = r.config; });
+  if (CFGS[CLV] && BANKS[CLV]) BANKS[CLV].codes = Object.fromEntries(Object.entries(CFGS[CLV].t1).filter(([k]) => !k.includes(".")).map(([k, t]) => [k, `${k} · ${t}`]));
+  return true;
 }
 $("#bOut").onclick = async () => { clearInterval(poll); await sb.auth.signOut(); location.hash = ""; location.reload(); };
 $("#bRef").onclick = load;
@@ -73,7 +82,7 @@ $("#fCop").onchange = e => { lf.cop = e.target.value; navCounts(); renderList();
 
 // ---- navigasi berbasis URL: #/peserta, #/peserta/<id>, #/training, #/training/<id copart>, #/analisis (+ ?batch=<filter>) ----
 // Tombol Back/Forward browser, refresh, dan tautan langsung ke halaman/peserta tetap berfungsi.
-const PATH = { list: "peserta", batch: "training", anal: "analisis" }, PAGE = { peserta: "list", training: "batch", batch: "batch", analisis: "anal" };
+const PATH = { list: "peserta", batch: "training", anal: "analisis", bank: "bank-soal" }, PAGE = { peserta: "list", training: "batch", batch: "batch", analisis: "anal", "bank-soal": "bank" };
 const href = (p, id) => "#/" + PATH[p] + (id ? "/" + id : "") + (bf !== "all" ? "?batch=" + bf : "");
 function parseHash() {
   const [path, qs] = location.hash.replace(/^#\/?/, "").split("?"), [pg, id] = path.split("/");
@@ -82,23 +91,26 @@ function parseHash() {
 const nav = (p, id) => { location.hash = href(p, id); };
 window.addEventListener("hashchange", render);
 function render() {
-  const r = parseHash(), fromList = route.p === "list" && !route.id && !$("#vList").hidden, det = r.p === "list" && r.id;
+  const r0 = parseHash();
+  if (route.p === "bank" && route.id && !(r0.p === "bank" && r0.id === route.id) && !BE.canLeave()) { history.replaceState(null, "", href("bank", route.id)); return; }
+  const r = r0, fromList = route.p === "list" && !route.id && !$("#vList").hidden, det = r.p === "list" && r.id;
   if (r.b !== bf) { bf = [...$("#fb").options].some(o => o.value === r.b) ? r.b : "all"; $("#fb").value = bf; setXlsLabel(); }
   if (det && fromList) listY = window.scrollY;                        // ingat posisi daftar
   const backToList = route.p === "list" && route.id && !r.id && r.p === "list";
   route = { p: r.p, id: r.id };
   $$(".sn-i").forEach(a => { const on = a.dataset.p === r.p; a.classList.toggle("on", on); on ? a.setAttribute("aria-current", "page") : a.removeAttribute("aria-current"); a.href = href(a.dataset.p); });
-  document.title = (det ? "Detail peserta" : { list: "Peserta", batch: "Copart & Training", anal: "Analisis soal" }[r.p]) + " — Trainer Console";
+  document.title = (det ? "Detail peserta" : { list: "Peserta", batch: "Copart & Training", anal: "Analisis soal", bank: r.id === "baru" ? "Bank soal baru" : r.id ? "Ubah bank soal" : "Bank soal" }[r.p]) + " - Trainer Console";
   if (det) { $("#vList").hidden = true; $("#vDet").hidden = false; navCounts(); openDet(r.id); return; }
   cur = null; $("#vDet").hidden = true; $("#vList").hidden = false;
-  $("#pgList").hidden = r.p !== "list"; $("#pgBatch").hidden = r.p !== "batch"; $("#pgAnal").hidden = r.p !== "anal";
+  $("#pgList").hidden = r.p !== "list"; $("#pgBatch").hidden = r.p !== "batch"; $("#pgAnal").hidden = r.p !== "anal"; $("#pgBank").hidden = r.p !== "bank";
+  if (r.p === "bank" && r.id) { navCounts(); BE.open(r.id); window.scrollTo(0, 0); return; }
   paint();
   window.scrollTo(0, backToList ? listY : 0);
 }
 function paint() {                                                    // gambar ulang halaman yang tampil tanpa mengubah posisi scroll
   navCounts();
   if (route.p === "list" && route.id) return;
-  if (route.p === "list") renderList(); else if (route.p === "batch") renderBatches(); else renderAnal();
+  if (route.p === "list") renderList(); else if (route.p === "batch") renderBatches(); else if (route.p === "bank") BE.paint(route.id); else renderAnal();
 }
 function setBf(v) {
   bf = v; $("#fb").value = v; setXlsLabel(); an.bank = null;
@@ -110,6 +122,7 @@ function navCounts() {
   const base = batchRows(), live = base.filter(r => r.status === "in_progress").length, todo = base.filter(needsGrading).length;
   $("#nList").innerHTML = base.length ? base.length + (live ? ` <i title="${live} sedang mengerjakan">${live} aktif</i>` : "") + (todo ? ` <i title="${todo} menunggu penilaian manual">${todo} perlu dinilai</i>` : "") : "";
   $("#nBatch").textContent = hasTraining ? trainings.length || "" : batches.length || "";
+  $("#nBank").textContent = Object.values(BANKS).filter(b => !b.archived).length;
   const b = bOf(bf), ctx = b ? `${bPath(b)} · kode ${b.code} · ${bankOfBatch(b).short}` : fLabel(bf);
   lfCounts();
   $("#ctxList").textContent = [ctx, ...lfLabels()].join(" · ") + " · diperbarui otomatis";
@@ -268,20 +281,30 @@ function calcRaw(a, ms) {
     const total = max ? Math.round(got * 1000 / max) / 10 : 0;
     return { bk, cf, total, right: got, N: max, got, max, comp, parts, pmax, done, need, auto: 0, pm, final: a.status === "graded", essay: true };
   }
-  const N = Object.keys(cf.mc).length, pts = bk.manual ? 2 : 1;
-  for (const [n, k] of Object.entries(cf.mc)) {
-    const ok = String(mc[n] || "").toUpperCase() === k, c = (cf.comp || {})[n] || "—";
+  const mcm = cf.mc || {}, N = Object.keys(mcm).length, pts = bk.manual ? mcPts(cf) : 1;
+  for (const [n, k] of Object.entries(mcm)) {
+    const ok = String(mc[n] || "").toUpperCase() === k, c = (cf.comp || {})[n] || "-";
     comp[c] = comp[c] || { got: 0, max: 0 }; comp[c].max += pts; if (ok) { comp[c].got += pts; right++; }
   }
-  if (!bk.manual) { const total = Math.round(right * 1000 / N) / 10; return { bk, cf, total, right, N, comp, pm, final: scored(a) }; }
-  // bank 50 soal: A pilihan ganda 2 poin, B benar/salah 1 poin + alasan (rubrik), C & D rubrik trainer
+  if (!bk.manual) { const total = N ? Math.round(right * 1000 / N) / 10 : 0; return { bk, cf, total, right, N, comp, pm, final: scored(a) }; }
+  // bank campuran (bank 50 soal & bank campuran buatan admin): PG & benar/salah otomatis (poin dari kunci), alasan & esai dinilai rubrik.
+  // Skor per bagian (part); nilai = skor / skor maksimum × 100 (bank 50 soal: maksimum 100, jadi nilai = skor).
   ms = ms || a.manual_scores || {};
-  let tfr = 0; for (const [n, k] of Object.entries(cf.tf || {})) if ((ans.tf || {})[n] === k) tfr++;
-  const sum = s => cf.manual.filter(m => m.sec === s).reduce((t, m) => t + (Number(ms[m.id]) || 0), 0);
-  const parts = { A: right * 2, B: tfr + sum("B"), C: sum("C"), D: sum("D") }, total = parts.A + parts.B + parts.C + parts.D;
-  const done = cf.manual.filter(m => ms[m.id] !== undefined && ms[m.id] !== "").length, need = cf.manual.length;
-  return { bk, cf, total, right, N, comp, parts, tfr, done, need, auto: parts.A + tfr, pm, final: a.status === "graded", flag: parts.C < 12 && total >= 70 };
+  const tp = tfPts(cf), partN = n => (bk.sections[(bk.item[n] || {}).sec] || {}).part, parts = {}, pmax = {}, man = cf.manual || [];
+  Object.keys(bk.parts || {}).forEach(k => { parts[k] = 0; pmax[k] = 0; });
+  const add = (k, got, max) => { if (k === undefined) return; parts[k] = (parts[k] || 0) + got; pmax[k] = (pmax[k] || 0) + max; };
+  for (const [n, k] of Object.entries(mcm)) add(partN(n), String(mc[n] || "").toUpperCase() === k ? pts : 0, pts);
+  let tfr = 0; const NT = Object.keys(cf.tf || {}).length;
+  for (const [n, k] of Object.entries(cf.tf || {})) { const ok = (ans.tf || {})[n] === k; if (ok) tfr++; add(partN(n), ok ? tp : 0, tp); }
+  man.forEach(m => add(m.sec, Number(ms[m.id]) || 0, m.max));
+  const raw = Object.values(parts).reduce((t, x) => t + x, 0), max = Object.values(pmax).reduce((t, x) => t + x, 0);
+  const total = max ? Math.round(raw * 1000 / max) / 10 : 0;
+  const done = man.filter(m => ms[m.id] !== undefined && ms[m.id] !== "").length, need = man.length;
+  return { bk, cf, total, right, N, NT, comp, parts, pmax, tfr, done, need, got: raw, max, auto: right * pts + tfr * tp, autoMax: N * pts + NT * tp, pm,
+    final: a.status === "graded", flag: bk.version === MIX && parts.C < 12 && total >= 70 };
 }
+const mcPts = cf => num((cf || {}).mc_pts) ?? 2;           // poin PG & benar/salah bank campuran (bank 50 soal: 2 & 1)
+const tfPts = cf => num((cf || {}).tf_pts) ?? 1;
 function stLabel(a) {
   if (a.status === "remedial") return ["Remidi · belum mulai", "b-warn"];
   if (a.status === "in_progress") return [a.remedial ? "Mengerjakan remidi" : "Mengerjakan", "b-in_progress"];
@@ -298,33 +321,33 @@ const stat = (label, value, sub, hl) => `<div class="stat${hl ? " hl" : ""}"><sp
 function renderList() {
   renderListFilters();
   const base = listRows(), fin = base.filter(isFinal), cs = fin.map(a => calc(a)), todo = base.filter(needsGrading).length;
-  const avg = cs.length ? (cs.reduce((t, c) => t + c.total, 0) / cs.length).toFixed(1) : "—", top = cs.length ? Math.max(...cs.map(c => c.total)) : null;
+  const avg = cs.length ? (cs.reduce((t, c) => t + c.total, 0) / cs.length).toFixed(1) : "-", top = cs.length ? Math.max(...cs.map(c => c.total)) : null;
   const passN = cs.filter(c => c.pass).length, prog = base.filter(r => r.status === "in_progress").length, sub = base.filter(scored).length;
   const failN = cs.length - passN, remN = base.filter(r => r.remedial || r.status === "remedial").length, waitN = base.filter(r => r.status === "remedial").length;
   $("#stats").innerHTML = stat("Total peserta", base.length, `${fin.length} sudah dinilai`)
     + stat("Mengerjakan", prog, prog ? "sedang berlangsung" : waitN ? `<span class="wtx">${waitN} remidi belum mulai</span>` : "tidak ada yang aktif")
     + stat("Selesai", sub, todo ? `<span class="wtx">${todo} perlu dinilai trainer</span>` : base.length ? Math.round(sub / base.length * 100) + "% dari peserta" : "")
     + stat("Rata-rata nilai", avg, top !== null ? "tertinggi " + top : "", true)
-    + stat("Kelulusan", cs.length ? Math.round(passN / cs.length * 100) + "%" : "—", cs.length ? `${passN} dari ${cs.length} lulus${remN ? ` · ${remN} remidi` : ""}` : "belum ada nilai", true);
+    + stat("Kelulusan", cs.length ? Math.round(passN / cs.length * 100) + "%" : "-", cs.length ? `${passN} dari ${cs.length} lulus${remN ? ` · ${remN} remidi` : ""}` : "belum ada nilai", true);
   const segBtn = (v, n, t) => { const x = $(`#fs [data-v="${v}"]`); x.hidden = !n && fsv !== v; x.textContent = `${t} (${n})`; };
   segBtn("grade", todo, "Perlu dinilai"); segBtn("fail", failN, "Belum lulus"); segBtn("rem", remN, "Remidi");
   const list = filtered(), multi = new Set(base.map(r => (bankOfA(r) || {}).version)).size > 1;
   $("#tbFoot").textContent = list.length ? `Menampilkan ${list.length} dari ${base.length} peserta · klik baris untuk melihat detail` : "";
   $("#tb").innerHTML = list.length ? list.map(r => {
     const bk = bankOfA(r), legacy = !isCur(r), c = calc(r), tot = totalOf(r), pct = Math.round((r.answered_count || 0) / tot * 100), ev = evOf(r), fl = flOf(r).length, live = r.status === "in_progress", [stT, stC] = stLabel(r);
-    let score = "—";
+    let score = "-";
     if (scored(r) && legacy) score = `<span class="mut small">Soal versi lama</span>`;
     else if (c && scored(r) && c.final) score = `<b>${c.total}</b><span class="mut small"> /100</span> ${passBadge(c)}<div class="xs mut">${c.cat}</div>${r.remedial ? `<div class="xs mut">${esc(remNote(r, c))}</div>` : ""}`;
-    else if (c && scored(r) && c.need) score = `<span class="small">Menunggu penilaian</span><div class="xs mut">${c.essay ? "" : `otomatis ${c.auto}/55 · `}rubrik ${c.done}/${c.need}</div>`;
+    else if (c && scored(r) && c.need) score = `<span class="small">Menunggu penilaian</span><div class="xs mut">${c.essay || !c.autoMax ? "" : `otomatis ${c.auto}/${c.autoMax} · `}rubrik ${c.done}/${c.need}</div>`;
     else if (!scored(r) && r.remedial) score = `<span class="xs mut">sebelum remidi ${prevFinal(r)}</span>`;
     const wait = r.status === "remedial";
     return `<tr class="cl" data-id="${r.id}"><td><a class="b rowlink" href="${href("list", r.id)}">${esc(r.name)}</a><div class="mut small">${esc(r.job_title)}${r.copart ? " · " + esc(r.copart) : ""}${multi && bk ? " · " + esc(bk.short) : ""}</div>
         ${violTxt(ev) ? `<div class="xs wtx" style="margin-top:2px">${violTxt(ev)}</div>` : ""}</td>
       <td><span class="badge ${stC}">${stT}</span></td>
-      <td>${wait ? `<span class="xs mut">kode remidi <b class="nw">${esc(r.remedial_token || "—")}</b></span>` : legacy && scored(r) ? "—" : `<div class="pb"><div class="pbar"><i style="width:${pct}%"></i></div><span class="small">${r.answered_count || 0}/${tot}</span></div>
+      <td>${wait ? `<span class="xs mut">kode remidi <b class="nw">${esc(r.remedial_token || "-")}</b></span>` : legacy && scored(r) ? "-" : `<div class="pb"><div class="pbar"><i style="width:${pct}%"></i></div><span class="small">${r.answered_count || 0}/${tot}</span></div>
         ${live ? `<div class="xs mut" style="margin-top:4px">Sisa ${leftMin(r)} mnt${fl ? ` · ${fl} ragu-ragu` : ""}</div>` : ""}`}</td>
       <td class="small">${fmtD(r.started_at)}</td><td class="small">${fmtD(r.submitted_at || r.last_saved_at)}</td>
-      <td class="small">${mins(r) !== null ? mins(r) + " mnt" : "—"}</td>
+      <td class="small">${mins(r) !== null ? mins(r) + " mnt" : "-"}</td>
       <td class="nw">${score}</td></tr>`;
   }).join("") : `<tr><td colspan="7"><div class="empty">${base.length ? "Tidak ada peserta yang cocok dengan filter." : "Belum ada peserta. Bagikan kode batch untuk memulai."}</div></td></tr>`;
   $$("tr.cl").forEach(tr => tr.onclick = e => { if (!e.target.closest("a") && !getSelection().toString()) nav("list", tr.dataset.id); });
@@ -381,14 +404,14 @@ function fmtRange(t) {                               // "1 - 3 Juli 2026", "30 J
 const emptyCard = (title, text, btn) => `<div class="card empty"><h3 style="margin:0 0 6px;color:var(--ink)">${title}</h3><p style="margin:0 0 16px">${text}</p>${btn}</div>`;
 function batchCard(b, title, meta) {
   const p = rows.filter(r => r.batch_id === b.id), sub = p.filter(scored), cs = p.filter(isFinal).map(a => calc(a)), todo = p.filter(needsGrading).length;
-  const avg = cs.length ? (cs.reduce((t, c) => t + c.total, 0) / cs.length).toFixed(1) : "—", s = b.settings || {}, [stT, stC] = bState(b), bk = bankOfBatch(b);
+  const avg = cs.length ? (cs.reduce((t, c) => t + c.total, 0) / cs.length).toFixed(1) : "-", s = b.settings || {}, [stT, stC] = bState(b), bk = bankOfBatch(b);
   const failN = p.filter(failed).length, remN = p.filter(r => r.remedial || r.status === "remedial").length;
   const spec = [bk.label, `${b.duration_minutes || bk.minutes} menit`];
   if (hasSettings) {
     spec.push(`lulus ≥ ${num(s.pass_mark) ?? 70}`);
     Object.entries(OPT_LABEL).forEach(([k, t]) => s[k] && !(noMc(bk) && MC_ONLY.includes(k)) && spec.push(t.toLowerCase()));
   }
-  const sched = (hasSettings && (b.open_from || b.open_until) ? `<div class="specs">Jadwal: ${b.open_from ? fmtD(b.open_from) : "…"} – ${b.open_until ? fmtD(b.open_until) : "…"}</div>` : "")
+  const sched = (hasSettings && (b.open_from || b.open_until) ? `<div class="specs">Jadwal: ${b.open_from ? fmtD(b.open_from) : "…"} - ${b.open_until ? fmtD(b.open_until) : "…"}</div>` : "")
     + (bk.kind === "clause" ? `<div class="specs">${esc(clSpec(s))}</div>` : "");
   return `<div class="bc ${b.is_open ? "" : "off"}">
     <div class="bc-top"><div><h3>${esc(title)}</h3><p>${meta}</p></div><span class="badge ${stC}">${stT}</span></div>
@@ -551,7 +574,7 @@ function clSync() {
   $("#clsep").closest(".tg").hidden = !both || (!cl.p1.n && !cl.p2.n); $("#clseq").closest(".tg").hidden = !both;
   const over = both && (!cl.sep || c.p1 + c.p2 > c.pool), msg = [];
   msg.push(`Setiap peserta mengerjakan <b>${c.p1 + c.p2} soal</b>${both ? ` (Jenis 1: ${c.p1} · Jenis 2: ${c.p2})` : ""}.`);
-  if (over && !cl.seq) msg.push("Klausul yang sama dapat muncul di kedua jenis dan Jenis 2 terbuka sejak awal — keterangan di Jenis 2 bisa dipakai menjawab Jenis 1. Aktifkan <b>Kerjakan berurutan</b> atau undi sebagian klausul yang berbeda.");
+  if (over && !cl.seq) msg.push("Klausul yang sama dapat muncul di kedua jenis dan Jenis 2 terbuka sejak awal - keterangan di Jenis 2 bisa dipakai menjawab Jenis 1. Aktifkan <b>Kerjakan berurutan</b> atau undi sebagian klausul yang berbeda.");
   if (cl.p2.on && !cl.p2.shuf) msg.push("Keterangan Jenis 2 tidak diacak; nomor mudah ditebak dari urutannya.");
   $("#clSum").innerHTML = msg.join(" ");
   syncBankHint();
@@ -564,7 +587,7 @@ $("#clSec").addEventListener("change", e => {
 });
 $("#clSec").addEventListener("input", e => { if (e.target.type === "number") clSync(); });
 const clSpec = s => {                                // ringkasan pengaturan klausul untuk kartu batch
-  const cl = CC.clOf(s), c = CC.clCount(cl), sc = cl.scope.length === 10 ? "klausul 1–10" : "klausul " + cl.scope.join(", ");
+  const cl = CC.clOf(s), c = CC.clCount(cl), sc = cl.scope.length === 10 ? "klausul 1-10" : "klausul " + cl.scope.join(", ");
   const pt = (p, t) => cl["p" + p].on ? `${t}: ${cl["p" + p].n ? c["p" + p] + " diundi" : "semua " + c["p" + p]}${cl["p" + p].shuf ? ", urutan acak" : ""}` : "";
   return [sc, pt(1, "Jenis 1"), pt(2, "Jenis 2"), cl.p1.on && cl.p2.on && cl.seq ? "berurutan" : ""].filter(Boolean).join(" · ");
 };
@@ -574,7 +597,7 @@ function openBatch(b, dup, tid) {
   // batch berada di dalam Training; batch lama tanpa training dapat dipindahkan lewat pilihan ini
   const trn = b ? b.training_id || "" : tid || "", t0 = tOf(trn);
   $("#bnTrnW").hidden = !hasTraining;
-  $("#bnTrn").innerHTML = (tOf(trn) ? "" : `<option value="">— Pilih training —</option>`) + coparts.map(c => { const ts = cTrainings(c); return ts.length ? `<optgroup label="${esc(c.name)}">${ts.map(t => `<option value="${t.id}">${esc(t.name)}${fmtRange(t) ? " · " + esc(fmtRange(t)) : ""}</option>`).join("")}</optgroup>` : ""; }).join("");
+  $("#bnTrn").innerHTML = (tOf(trn) ? "" : `<option value="">- Pilih training -</option>`) + coparts.map(c => { const ts = cTrainings(c); return ts.length ? `<optgroup label="${esc(c.name)}">${ts.map(t => `<option value="${t.id}">${esc(t.name)}${fmtRange(t) ? " · " + esc(fmtRange(t)) : ""}</option>`).join("")}</optgroup>` : ""; }).join("");
   $("#bnTrn").value = trn;
   $("#bnNameL").textContent = hasTraining ? "Nama batch / test" : "Nama Copart";
   $("#bnName").placeholder = hasTraining ? "Post-test ISO 9001" : "PT Sinar Jaya Abadi";
@@ -583,7 +606,7 @@ function openBatch(b, dup, tid) {
   $("#mbTitle").textContent = dup ? "Duplikat Batch" : b ? "Pengaturan Batch" : "Batch Baru";
   $("#mbSub").textContent = dup ? `Salinan pengaturan dari ${bPath(b)} · kode ${b.code}. Kode baru dibuat otomatis; peserta tidak ikut disalin.` : b ? `${bPath(b)} · kode ${b.code}`
     : (t0 ? `${(cOf(t0.copart_id) || {}).name} · ${t0.name} · ` : "") + "Kode 6 angka dibuat otomatis.";
-  $("#bnBank").innerHTML = Object.values(BANKS).map(x => `<option value="${x.version}" ${!CFGS[x.version] ? "disabled" : ""}>${esc(x.label)}${!CFGS[x.version] ? ` (jalankan ${esc(x.sql || "SQL bank soal")})` : ""}</option>`).join("");
+  $("#bnBank").innerHTML = Object.values(BANKS).filter(x => !x.archived || x.version === bk.version).map(x => `<option value="${x.version}" ${!CFGS[x.version] ? "disabled" : ""}>${esc(x.label)}${!CFGS[x.version] ? ` (jalankan ${esc(x.sql || "SQL bank soal")})` : ""}</option>`).join("");
   $("#bnBank").value = bk.version; $("#bnBank").disabled = !hasSettings;
   $("#bnName").value = !hasTraining ? (b ? b.copart : "") : b ? bName(b) : t0 ? `Test ${tBatches(t0).length + 1}` : "";
   $("#bnNote").value = b ? b.note || "" : "";
@@ -635,7 +658,7 @@ $("#fBatch").addEventListener("submit", async e => {
     ({ data, error } = await sb.rpc("create_batch", hasSettings ? { p_copart: name, p_note: note, p_minutes: min, p_settings: settings, p_open_from: from, p_open_until: until } : { p_copart: name, p_note: note, p_minutes: min }));
   }
   $("#bnAdd").disabled = false;
-  if (error) return err("Gagal menyimpan: " + error.message + (/function|p_settings|p_minutes|p_training|schema cache|column/i.test(error.message) ? " — jalankan ulang supabase/batch.sql, supabase/settings.sql, lalu supabase/training.sql di SQL Editor." : ""));
+  if (error) return err("Gagal menyimpan: " + error.message + (/function|p_settings|p_minutes|p_training|schema cache|column/i.test(error.message) ? " - jalankan ulang supabase/batch.sql, supabase/settings.sql, lalu supabase/training.sql di SQL Editor." : ""));
   closeBatch();
   if (!editId) {
     $("#bnOk").innerHTML = `<div class="newcode"><div><div class="small mut">Batch dibuat untuk <b>${esc(bPath(data))}</b> (${esc(bankOfBatch(data).label)}, ${data.duration_minutes} menit). Bagikan kode ini ke peserta:</div><div class="code" style="margin-top:8px">${esc(data.code)}</div></div>
@@ -727,7 +750,7 @@ async function openRemFor(list) {
       res = await sb.from("attempts").update(Object.assign({ remedial_token: newToken() }, p)).eq("id", a.id).eq("status", a.status).select().single();
       if (!res.error || !/duplicate|unique/i.test(res.error.message)) break;
     }
-    if (res.error) throw new Error(`${a.name}: ${res.error.message}${/remedial|history|status_check|column/i.test(res.error.message) ? " — jalankan ulang supabase/settings.sql" : ""}`);
+    if (res.error) throw new Error(`${a.name}: ${res.error.message}${/remedial|history|status_check|column/i.test(res.error.message) ? " - jalankan ulang supabase/settings.sql" : ""}`);
     const i = rows.findIndex(r => r.id === a.id); if (i >= 0) rows[i] = res.data;
     out.push(res.data);
   }
@@ -743,7 +766,7 @@ async function cancelRem(a) {                        // batalkan remidi yang bel
   const i = rows.findIndex(r => r.id === data.id); if (i >= 0) rows[i] = data;
   return data;
 }
-const remLines = list => list.map(r => `${r.name} — kode ${r.remedial_token} — ${remUrl(r.remedial_token)}`).join("\n");
+const remLines = list => list.map(r => `${r.name} - kode ${r.remedial_token} - ${remUrl(r.remedial_token)}`).join("\n");
 let remB = null;
 function openRem(b) {
   remB = b; $("#mrErr").textContent = ""; $("#mrTitle").textContent = "Remidi"; renderRem(); $("#mRem").hidden = false;
@@ -794,8 +817,8 @@ function openDet(id, keep) {
   if (bk.manual && bk.parts && !bk.parts[cur.tab]) cur.tab = Object.keys(bk.parts)[0];
   const dur = a.duration_minutes || bk.minutes, end = new Date(new Date(a.started_at).getTime() + dur * 60000), [stT, stC] = stLabel(a), h = hist(a);
   let cards = "";
-  if (wait) { const x = h[h.length - 1] || {}; cards = stat("Remidi", `ke-${a.remedial}`, "peserta belum mulai", true) + stat("Kode remidi", `<span class="code">${esc(a.remedial_token || "—")}</span>`, "berlaku sampai peserta mulai")
-      + stat("Nilai sebelumnya", x.final ?? x.score ?? "—", x.pass ? "lulus" : "belum lulus") + stat("KKM", passMark(a), RULES[remRule(a)][0]); }
+  if (wait) { const x = h[h.length - 1] || {}; cards = stat("Remidi", `ke-${a.remedial}`, "peserta belum mulai", true) + stat("Kode remidi", `<span class="code">${esc(a.remedial_token || "-")}</span>`, "berlaku sampai peserta mulai")
+      + stat("Nilai sebelumnya", x.final ?? x.score ?? "-", x.pass ? "lulus" : "belum lulus") + stat("KKM", passMark(a), RULES[remRule(a)][0]); }
   else if (lock) cards = stat("Terjawab", `${a.answered_count || 0}<small> /${bk.total}</small>`, Math.round((a.answered_count || 0) / bk.total * 100) + "% selesai", true) + stat("Sisa waktu", `${leftMin(a)}<small> mnt</small>`, "berakhir " + end.toLocaleTimeString("id-ID", { hour: "2-digit", minute: "2-digit" }))
       + stat("Ragu-ragu", fl.length, "soal ditandai") + stat("Pelanggaran", viol(ev), viol(ev) ? "keluar halaman / layar penuh" : "tidak ada");
   else if (c && c.essay) cards = stat("Nilai", c.final ? `${c.total}<small> /100</small>` : `${c.total}<small> sementara</small>`, c.final ? c.cat + (c.raw !== c.total ? ` · nilai remidi ${c.raw}` : "") : "menunggu penilaian rubrik", true)
@@ -803,14 +826,14 @@ function openDet(id, keep) {
       + stat("Penilaian rubrik", `${c.done}<small> /${c.need}</small>`, c.done === c.need ? "lengkap" : "soal belum dinilai")
       + stat("Kelulusan", c.final ? (c.pass ? "Lulus" : "Belum lulus") : "-", `nilai lulus ${c.pm}`);
   else if (c && bk.manual) cards = stat("Nilai", c.final ? `${c.total}<small> /100</small>` : `${c.total}<small> sementara</small>`, c.final ? c.cat : "menunggu penilaian rubrik", true)
-      + stat("Dinilai otomatis", `${c.auto}<small> /55</small>`, `${c.right} dari ${c.N} PG benar · ${c.tfr}/5 B/S`)
+      + stat("Dinilai otomatis", `${c.auto}<small> /${c.autoMax}</small>`, [c.N ? `${c.right} dari ${c.N} PG benar` : "", c.NT ? `${c.tfr}/${c.NT} B/S` : ""].filter(Boolean).join(" · ") || "tidak ada soal otomatis")
       + stat("Penilaian rubrik", `${c.done}<small> /${c.need}</small>`, c.done === c.need ? "lengkap" : "item belum dinilai")
-      + stat("Kelulusan", c.final ? (c.pass ? "Lulus" : "Belum lulus") : "—", `nilai lulus ${c.pm}`);
+      + stat("Kelulusan", c.final ? (c.pass ? "Lulus" : "Belum lulus") : "-", `nilai lulus ${c.pm}`);
   else if (c) cards = stat("Nilai", `${c.total}<small> /100</small>`, c.cat + (c.raw !== c.total ? ` · nilai remidi ${c.raw}` : ""), true) + stat("Jawaban benar", `${c.right}<small> /${c.N}</small>`, `${a.answered_count || 0} dari ${bk.total} terjawab`)
-      + stat("Kelulusan", c.pass ? "Lulus" : "Belum lulus", `nilai lulus ${c.pm}`) + stat("Durasi", mins(a) !== null ? mins(a) + "<small> mnt</small>" : "—", `dari ${dur} menit`);
+      + stat("Kelulusan", c.pass ? "Lulus" : "Belum lulus", `nilai lulus ${c.pm}`) + stat("Durasi", mins(a) !== null ? mins(a) + "<small> mnt</small>" : "-", `dari ${dur} menit`);
   const rules = [bk.label, ...Object.entries(OPT_LABEL).filter(([k]) => s[k] && !(noMc(bk) && MC_ONLY.includes(k))).map(([, t]) => t), bk.kind === "clause" ? clSpec(s) : ""].filter(Boolean).join(" · ");
   const remPanel = wait ? `<div class="panel"><h3>Remidi ke-${a.remedial}</h3><p class="small mut" style="margin:0 0 12px">Bagikan kode atau tautan ini. Peserta juga dapat memulai remidi dari perangkat yang sama tanpa kode.</p>
-        <div class="ctrl"><span class="code">${esc(a.remedial_token || "—")}</span><button class="btn ghost sm" id="bRemCp">Salin kode</button><button class="btn ghost sm" id="bRemLk">Salin tautan</button></div>
+        <div class="ctrl"><span class="code">${esc(a.remedial_token || "-")}</span><button class="btn ghost sm" id="bRemCp">Salin kode</button><button class="btn ghost sm" id="bRemLk">Salin tautan</button></div>
         <label class="f">Batalkan remidi</label><button class="btn danger sm" id="bRemCx">Batalkan &amp; pulihkan nilai sebelumnya</button><div class="small" id="ctlMsg"></div></div>`
     : failed(a) ? `<div class="remline"><span class="small mut">Nilai di bawah KKM ${c.pm}.</span><button class="btn soft sm" id="bRemOpen">Buka remidi</button></div>` : "";
   const ids = filtered().map(r => r.id), pos = ids.indexOf(a.id), prev = pos > 0 ? ids[pos - 1] : null, next = pos >= 0 && pos < ids.length - 1 ? ids[pos + 1] : null;
@@ -830,7 +853,7 @@ function openDet(id, keep) {
         <dt>Aktivitas terakhir</dt><dd>${fmtD(a.last_saved_at)}</dd>
         <dt>Keluar halaman</dt><dd>${ev.blur ? `<span class="wtx">${ev.blur} kali · total ${away(ev.away)}</span>${ev.last ? ` <span class="mut small">terakhir ${fmtD(ev.last)}</span>` : ""}` : "Tidak pernah"}</dd>
         <dt>Keluar layar penuh</dt><dd>${ev.fs ? `<span class="wtx">${ev.fs} kali</span>` : "Tidak pernah"}${ev.nofs ? ` <span class="wtx small">· browser peserta tidak mendukung layar penuh</span>` : ""}</dd>
-        <dt>Ragu-ragu</dt><dd>${fl.length ? fl.sort((x, y) => x - y).join(", ") + (s.shuffle_q ? ` <span class="mut small">(nomor bank soal)</span>` : "") : "—"}</dd>
+        <dt>Ragu-ragu</dt><dd>${fl.length ? fl.sort((x, y) => x - y).join(", ") + (s.shuffle_q ? ` <span class="mut small">(nomor bank soal)</span>` : "") : "-"}</dd>
         <dt>Aturan</dt><dd>${esc(rules)}</dd></dl></div>
       ${lock ? `<div class="panel"><h3>Kontrol trainer</h3>
         <label class="f" style="margin-top:0">Tambah waktu</label><div class="ctrl"><select id="addMin"><option value="5">+5 menit</option><option value="10" selected>+10 menit</option><option value="15">+15 menit</option><option value="30">+30 menit</option></select><button class="btn ghost" id="bAdd">Tambah</button></div>
@@ -842,13 +865,13 @@ function openDet(id, keep) {
         <div style="display:flex;gap:10px;justify-content:flex-end;align-items:center;margin-top:12px"><span class="mut small" id="svMsg"></span><button class="btn" id="bSave">Simpan</button></div>${remPanel}<div class="small" id="ctlMsg"></div></div>`}
     </div>
     ${h.length ? `<h2 style="margin:28px 0 12px">Riwayat percobaan</h2><div class="tw"><table><thead><tr><th>Percobaan</th><th>Mulai</th><th>Dikirim</th><th>Terjawab</th><th>Nilai</th><th></th></tr></thead><tbody>
-      ${h.map((x, i) => `<tr><td>${i === 0 ? "Ujian awal" : "Remidi ke-" + i}</td><td class="small">${fmtD(x.started_at)}</td><td class="small">${fmtD(x.submitted_at)}</td><td class="small">${x.answered_count ?? "—"}</td><td><b>${x.final ?? x.score}</b>${x.final !== undefined && x.final !== x.score ? ` <span class="xs mut">(mentah ${x.score})</span>` : ""}</td><td><span class="badge ${x.pass ? "b-ok" : "b-bad"}">${x.pass ? "Lulus" : "Belum lulus"}</span></td></tr>`).join("")}
-      <tr><td><b>Remidi ke-${a.remedial}</b> <span class="xs mut">saat ini</span></td><td class="small">${wait ? "—" : fmtD(a.started_at)}</td><td class="small">${fmtD(a.submitted_at)}</td><td class="small">${wait ? "—" : a.answered_count || 0}</td>
-        <td>${c && scored(a) && c.final ? `<b>${c.raw}</b> → nilai akhir <b>${c.total}</b> <span class="xs mut">(${esc(RULES[c.rule || "kkm"][0])})</span>` : "—"}</td><td>${c && scored(a) && c.final ? passBadge(c) : ""}</td></tr></tbody></table></div>` : ""}
+      ${h.map((x, i) => `<tr><td>${i === 0 ? "Ujian awal" : "Remidi ke-" + i}</td><td class="small">${fmtD(x.started_at)}</td><td class="small">${fmtD(x.submitted_at)}</td><td class="small">${x.answered_count ?? "-"}</td><td><b>${x.final ?? x.score}</b>${x.final !== undefined && x.final !== x.score ? ` <span class="xs mut">(mentah ${x.score})</span>` : ""}</td><td><span class="badge ${x.pass ? "b-ok" : "b-bad"}">${x.pass ? "Lulus" : "Belum lulus"}</span></td></tr>`).join("")}
+      <tr><td><b>Remidi ke-${a.remedial}</b> <span class="xs mut">saat ini</span></td><td class="small">${wait ? "-" : fmtD(a.started_at)}</td><td class="small">${fmtD(a.submitted_at)}</td><td class="small">${wait ? "-" : a.answered_count || 0}</td>
+        <td>${c && scored(a) && c.final ? `<b>${c.raw}</b> → nilai akhir <b>${c.total}</b> <span class="xs mut">(${esc(RULES[c.rule || "kkm"][0])})</span>` : "-"}</td><td>${c && scored(a) && c.final ? passBadge(c) : ""}</td></tr></tbody></table></div>` : ""}
     <div id="sum"></div>
     ${wait || legacy || !cfgOf(bk) ? "" : bk.kind === "clause"
       ? `<div class="bar" style="margin-top:28px"><h2 style="margin-right:auto">Jawaban</h2><span class="mut small" id="grSt"></span><div class="seg" id="pf"><button data-v="all">Semua</button><button data-v="wrong">Salah / kosong</button><button data-v="auto">Perlu dicek</button><button data-v="fix">Dikoreksi</button><button data-v="flag">Ragu-ragu</button></div></div>
-      <div class="alert info">Penilaian awal otomatis: huruf besar/kecil, tanda baca, dan salah ketik kecil diabaikan; judul juga dicocokkan dengan <b>regex</b> — padanan kata Indonesia/Inggris/singkatan (mis. <i>Customer focus</i>, <i>SMM</i>) dan kata kunci yang cukup mirip. Filter <b>Perlu dicek</b> menampilkan jawaban yang dinilai dari kemiripan. Bila penilaian otomatis kurang sesuai, klik <b>Anggap benar / Anggap salah</b>; koreksi tersimpan otomatis dan nilai diperbarui.</div><div id="pn"></div>`
+      <div class="alert info">Penilaian awal otomatis: huruf besar/kecil, tanda baca, dan salah ketik kecil diabaikan; judul juga dicocokkan dengan <b>regex</b> - padanan kata Indonesia/Inggris/singkatan (mis. <i>Customer focus</i>, <i>SMM</i>) dan kata kunci yang cukup mirip. Filter <b>Perlu dicek</b> menampilkan jawaban yang dinilai dari kemiripan. Bila penilaian otomatis kurang sesuai, klik <b>Anggap benar / Anggap salah</b>; koreksi tersimpan otomatis dan nilai diperbarui.</div><div id="pn"></div>`
       : bk.manual
       ? `<div class="bar" style="margin-top:28px"><h2 style="margin-right:auto">Jawaban &amp; penilaian</h2><span class="mut small" id="grMsg"></span><div class="seg" id="gt">${Object.entries(bk.parts).map(([k, p]) => bk.essay ? `<button data-v="${k}" title="${esc(p.name)}">Kasus ${k}</button>` : `<button data-v="${k}">${k} · ${esc(p.name)}</button>`).join("")}</div></div><div id="pn"></div>`
       : `<div class="bar" style="margin-top:28px"><h2 style="margin-right:auto">Jawaban</h2><div class="seg" id="pf"><button data-v="all">Semua</button><button data-v="wrong">Salah / kosong</button><button data-v="flag">Ragu-ragu</button></div></div>
@@ -902,11 +925,13 @@ function summary() {
     comp.sort(([x], [y]) => x - y);
     parts = `<h2 style="margin:28px 0 12px">Rincian per jenis</h2><div class="tw"><table><thead><tr><th>Jenis</th><th>Benar</th><th>Persentase</th></tr></thead><tbody>${Object.entries(c.bk.parts).filter(([k]) => c.pmax[k]).map(([k, p]) => pctRow(`Jenis ${k} · ${esc(p.name)}`, c.parts[k], c.pmax[k])).join("")}</tbody></table></div>`;
   } else if (c.bk.manual) {
-    if (c.final && c.parts.D < 12) weak.push("Workshop 7 — ISO 9001:2026 Transition Project");
-    parts = `<h2 style="margin:28px 0 12px">Rincian per bagian</h2><div class="tw"><table><thead><tr><th>Bagian</th><th>Skor</th><th>Persentase</th></tr></thead><tbody>${Object.entries(c.bk.parts).map(([k, p]) => pctRow(`${k} · ${esc(p.name)}`, c.parts[k], p.max)).join("")}</tbody></table></div>
-      <p class="small mut" style="margin:10px 2px 0">Knowledge ${c.parts.A + c.parts.B}/60 · Application ${c.parts.C}/20 · Transition ${c.parts.D}/20${c.final ? "" : ` · rubrik terisi ${c.done}/${c.need} item`}</p>
+    const mix50 = c.bk.version === MIX;
+    if (mix50 && c.final && c.parts.D < 12) weak.push("Workshop 7 - ISO 9001:2026 Transition Project");
+    parts = `<h2 style="margin:28px 0 12px">Rincian per bagian</h2><div class="tw"><table><thead><tr><th>Bagian</th><th>Skor</th><th>Persentase</th></tr></thead><tbody>${Object.entries(c.bk.parts).map(([k, p]) => pctRow(`${k} · ${esc(p.name)}`, c.parts[k], c.pmax[k])).join("")}</tbody></table></div>
+      <p class="small mut" style="margin:10px 2px 0">${mix50 ? `Knowledge ${c.parts.A + c.parts.B}/60 · Application ${c.parts.C}/20 · Transition ${c.parts.D}/20` : `Total skor ${c.got}/${c.max} → nilai ${c.total}/100`}${c.final ? "" : ` · rubrik terisi ${c.done}/${c.need} item`}</p>
       ${c.final && c.flag ? `<div class="alert"><b>Perhatian:</b> Application score di bawah 60% dari maksimum. Peserta sebaiknya tidak dinyatakan kompeten hanya karena total tinggi; gunakan hasil sebagai alat diagnosis.</div>` : ""}`;
   }
+  if (!comp.length || comp.every(([k]) => k === "-")) { $("#sum").innerHTML = parts; return; }   // tanpa kode area: tabel area tidak ditampilkan
   $("#sum").innerHTML = parts + `<h2 style="margin:28px 0 12px">Rincian per ${c.clause ? "klausul utama" : "area"}${c.bk.manual ? " (pilihan ganda)" : ""}</h2>
     <div class="tw"><table><thead><tr><th>${c.clause ? "Klausul" : "Area"}</th><th>${c.bk.manual ? "Poin" : "Benar"}</th><th>Persentase</th></tr></thead><tbody>${comp.map(([k, v]) => pctRow(`${esc((c.bk.codes || {})[k] || k)}${c.clause ? "" : ` <span class="mut small">${esc(k)}</span>`}`, v.got, v.max)).join("")}</tbody></table></div>
     ${weak.length && c.final ? `<div class="alert"><b>Rekomendasi remedial</b> (area &lt; 60%): ${weak.map(esc).join("; ")}</div>` : ""}`;
@@ -919,8 +944,8 @@ function mcTable(items, cf, pts) {
     const v = mc[n] || "", k = cf.mc[n], ok = v === k, f = fl.includes(n);
     if (cur.filter === "wrong" && (!fin || ok)) return "";
     if (cur.filter === "flag" && !f) return "";
-    const tx = x => x ? `${x}. ${esc(o[L.indexOf(x)])}` : `<span class="mut">—</span>`;
-    return `<tr><td class="nw">${n}${f ? `<span class="fmark" title="Ditandai ragu-ragu">R</span>` : ""}</td><td>${esc(q)}<div class="mut small">${esc((cf.comp || {})[n] || "")}${cf.exp && cf.exp[n] ? " · Pembahasan: " + esc(cf.exp[n]) : ""}</div></td><td>${tx(v)}</td><td>${tx(k)}</td><td class="nw ${fin ? (ok ? "ok" : "no") : ""}">${fin ? (ok ? `Benar +${pts}` : "Salah") : "—"}</td></tr>`;
+    const tx = x => x ? `${x}. ${esc(o[L.indexOf(x)])}` : `<span class="mut">-</span>`;
+    return `<tr><td class="nw">${n}${f ? `<span class="fmark" title="Ditandai ragu-ragu">R</span>` : ""}</td><td>${esc(q)}<div class="mut small">${esc((cf.comp || {})[n] || "")}${cf.exp && cf.exp[n] ? " · Pembahasan: " + esc(cf.exp[n]) : ""}</div></td><td>${tx(v)}</td><td>${tx(k)}</td><td class="nw ${fin ? (ok ? "ok" : "no") : ""}">${fin ? (ok ? `Benar +${pts}` : "Salah") : "-"}</td></tr>`;
   }).join("");
   const none = cur.filter === "flag" ? "Tidak ada soal yang ditandai ragu-ragu." : "Tidak ada jawaban salah.";
   return `<div class="tw"><table class="qx"><thead><tr><th>No</th><th>Pertanyaan</th><th>Jawaban peserta</th><th>Kunci</th><th>Hasil</th></tr></thead><tbody>${body || `<tr><td colspan="5"><div class="empty">${none}</div></td></tr>`}</tbody></table></div>`;
@@ -939,14 +964,14 @@ function clausePanel() {
     if (cur.filter === "flag" && !f) return "";
     if (cur.filter === "auto" && !gradeNote(r.g)) return "";
     const v = txt[it.n], p1 = it.part === "1", note = gradeNote(r.g);
-    const how = !fin ? "—" : r.ov !== undefined ? `${r.ok ? "Benar" : "Salah"} <span class="xs mut">· koreksi trainer${note ? ` (otomatis: ${r.g.ok ? "benar" : "salah"}, ${note})` : ""}</span>` : `${r.ok ? "Benar" : "Salah"}${note ? ` <span class="xs mut">· ${note}</span>` : ""}`;
+    const how = !fin ? "-" : r.ov !== undefined ? `${r.ok ? "Benar" : "Salah"} <span class="xs mut">· koreksi trainer${note ? ` (otomatis: ${r.g.ok ? "benar" : "salah"}, ${note})` : ""}</span>` : `${r.ok ? "Benar" : "Salah"}${note ? ` <span class="xs mut">· ${note}</span>` : ""}`;
     const btn = !fin ? "" : r.ov !== undefined ? `<button type="button" class="link" data-ov="${it.n}" data-to="">Kembalikan otomatis</button>` : `<button type="button" class="link" data-ov="${it.n}" data-to="${r.ok ? 0 : 1}">${r.ok ? "Anggap salah" : "Anggap benar"}</button>`;
     return `<tr><td class="nw">${it.n}${f ? `<span class="fmark" title="Ditandai ragu-ragu">R</span>` : ""}</td>
       <td>${p1 ? `<b>${esc(it.ref)}</b>` : `${esc(it.q)}${it.sub ? `<div class="xs mut">${esc(it.sub)}</div>` : ""}`}</td>
-      <td>${v && String(v).trim() ? esc(v) : `<span class="mut">—</span>`}</td>
+      <td>${v && String(v).trim() ? esc(v) : `<span class="mut">-</span>`}</td>
       <td>${p1 ? esc(r.key) : `<b>${esc(r.num)}</b>`}</td>
       <td class="nw ${fin ? (r.ok ? "ok" : "no") : ""}">${how}<div>${btn}</div></td></tr>`; };
-  const none = { flag: "Tidak ada soal yang ditandai ragu-ragu.", fix: "Belum ada koreksi trainer.", wrong: "Tidak ada jawaban salah.", auto: "Tidak ada jawaban yang dinilai dengan kemiripan — semua jawaban persis kunci atau jelas salah.", all: "Tidak ada soal." }[cur.filter] || "Tidak ada soal.";
+  const none = { flag: "Tidak ada soal yang ditandai ragu-ragu.", fix: "Belum ada koreksi trainer.", wrong: "Tidak ada jawaban salah.", auto: "Tidak ada jawaban yang dinilai dengan kemiripan - semua jawaban persis kunci atau jelas salah.", all: "Tidak ada soal." }[cur.filter] || "Tidak ada soal.";
   const tbl = (p, head) => { const items = bk.items.filter(it => it.part === p); if (!items.length) return "";
     const body = items.map(res).join("");
     return `<h3 style="margin:18px 2px 10px">Jenis ${p} · ${esc(bk.parts[p].name)} <span class="mut small" style="font-weight:500">${c.parts[p]}/${c.pmax[p]} benar</span></h3>
@@ -976,37 +1001,37 @@ async function saveFix() {
   } catch (e) { if ($("#grSt")) $("#grSt").innerHTML = `<span class="no">Gagal menyimpan: ${esc(e.message)}</span>`; }
 }
 
-// ---- penilaian manual dengan rubrik (bank 50 soal) — tersimpan otomatis ----
+// ---- penilaian manual dengan rubrik (bank 50 soal) - tersimpan otomatis ----
 const ansBox = v => v && String(v).trim() ? `<div class="ans">${esc(v)}</div>` : `<div class="ans empty">(tidak dijawab)</div>`;
 function rubSel(m, lock) {
   const v = cur.draft[m.id];
-  return `<label class="rub">Skor <select data-m="${m.id}" ${lock ? "disabled" : ""}><option value="">—</option>${Array.from({ length: m.max + 1 }, (_, i) => `<option value="${i}" ${v !== undefined && v !== "" && Number(v) === i ? "selected" : ""}>${i}</option>`).join("")}</select> / ${m.max}</label>`;
+  return `<label class="rub">Skor <select data-m="${m.id}" ${lock ? "disabled" : ""}><option value="">-</option>${Array.from({ length: m.max + 1 }, (_, i) => `<option value="${i}" ${v !== undefined && v !== "" && Number(v) === i ? "selected" : ""}>${i}</option>`).join("")}</select> / ${m.max}</label>`;
 }
 function gradePanel() {
   const a = cur.a, bk = bankOfA(a), cf = cfgOf(bk), ans = a.answers || {}, lock = !scored(a), t = cur.tab, fl = flOf(a);
   const fm = n => fl.includes(n) ? `<span class="fmark" title="Ditandai ragu-ragu">R</span>` : "";
   let h = lock ? `<div class="alert info">Peserta masih mengerjakan. Penilaian rubrik dapat dilakukan setelah jawaban dikirim.</div>` : "";
   if (bk.essay && cf.scale) h += `<div class="alert info"><b>Skala skor per soal</b><ul class="crit" style="margin:6px 0 0">${cf.scale.map(x => `<li>${esc(x)}</li>`).join("")}</ul><div class="xs mut" style="margin-top:6px">Poin di bawah setiap jawaban adalah panduan isi jawaban yang diharapkan, bukan redaksi baku.</div></div>`;
-  if (t === "A") h += mcTable(bk.items.filter(it => it.kind === "mc"), cf, 2);
-  else if (t === "B") h += bk.items.filter(it => it.kind === "tf").map(({ n, q }) => {
-    const v = (ans.tf || {})[n], k = cf.tf[n], m = cf.manual.find(x => x.id === "B" + n), ok = v === k, lb = x => x === "B" ? "Benar" : x === "S" ? "Salah" : "—";
-    return `<div class="gi"><div class="gh"><b>${n}. ${esc(q)}${fm(n)}</b></div>
-      <p class="small" style="margin:6px 0 0">Jawaban peserta: <b>${lb(v)}</b> · Kunci: <b>${lb(k)}</b> · <span class="${ok ? "ok" : "no"}">${ok ? "+1 otomatis" : "0"}</span></p>
-      <div class="lbl">Alasan</div>${ansBox((ans.tfr || {})[n])}
-      ${m ? `<div class="gf"><span class="small mut">${esc([].concat(m.crit).join("; "))}</span>${rubSel(m, lock)}</div>` : ""}</div>`;
-  }).join("");
-  else {
-    const items = cf.manual.filter(m => m.sec === t), secs = bk.sections.filter(sc => sc.part === t);
-    h += secs.map(sc => {
-      const ns = sc.items.map(it => it.n), ms = items.filter(m => m.qs.some(n => ns.includes(n)));
-      const free = sc.items.filter(it => !items.some(m => m.qs.includes(it.n)));       // soal tanpa bobot rubrik (mis. No. 50)
-      return `${sc.scenario ? `<div class="scn"><div class="ey">${esc(sc.name)}</div>${esc(sc.scenario)}</div>` : ""}`
-        + ms.map(m => `<div class="gi"><div class="gh"><h3>${esc(m.label)}</h3>${rubSel(m, lock)}</div>
-          ${m.qs.map(n => `<div class="qt small"><b>${n}.</b> ${esc(bk.item[n].label ? bk.item[n].label + " — " : "")}${esc(bk.item[n].q)}${fm(n)}</div>${ansBox((ans.txt || {})[n])}`).join("")}
+  // satu tab = satu bagian (part); tiap studi kasus/bagian di dalamnya: kasus, tabel PG, benar/salah + alasan, lalu esai berrubrik
+  const man = cf.manual || [], mp = mcPts(cf), tp = tfPts(cf), lb = x => x === "B" ? "Benar" : x === "S" ? "Salah" : "-";
+  h += bk.sections.filter(sc => sc.part === t).map(sc => {
+    const mcs = sc.items.filter(it => it.kind === "mc"), tfs = sc.items.filter(it => it.kind === "tf"), es = sc.items.filter(it => it.kind === "essay");
+    const ens = es.map(it => it.n), ms = man.filter(m => m.qs.some(n => ens.includes(n)));
+    const free = es.filter(it => !man.some(m => m.qs.includes(it.n)));       // soal tanpa bobot rubrik (mis. No. 50)
+    return `${sc.scenario ? `<div class="scn"><div class="ey">${esc(sc.name)}</div>${esc(sc.scenario)}</div>` : ""}`
+      + (mcs.length ? mcTable(mcs, cf, mp) : "")
+      + tfs.map(({ n, q }) => {
+        const v = (ans.tf || {})[n], k = (cf.tf || {})[n], m = man.find(x => x.qs.includes(n)), ok = v === k;
+        return `<div class="gi"><div class="gh"><b>${n}. ${esc(q)}${fm(n)}</b></div>
+          <p class="small" style="margin:6px 0 0">Jawaban peserta: <b>${lb(v)}</b> · Kunci: <b>${lb(k)}</b> · <span class="${ok ? "ok" : "no"}">${ok ? `+${tp} otomatis` : "0"}</span></p>
+          <div class="lbl">Alasan</div>${ansBox((ans.tfr || {})[n])}
+          ${m ? `<div class="gf"><span class="small mut">${esc([].concat(m.crit).join("; "))}</span>${rubSel(m, lock)}</div>` : ""}</div>`;
+      }).join("")
+      + ms.map(m => `<div class="gi"><div class="gh"><h3>${esc(m.label)}</h3>${rubSel(m, lock)}</div>
+          ${m.qs.map(n => `<div class="qt small"><b>${n}.</b> ${esc(bk.item[n].label ? bk.item[n].label + " · " : "")}${esc(bk.item[n].q)}${fm(n)}</div>${ansBox((ans.txt || {})[n])}`).join("")}
           <ul class="crit">${[].concat(m.crit).map(x => `<li>${esc(x)}</li>`).join("")}</ul></div>`).join("")
-        + free.map(it => `<div class="gi"><div class="gh"><h3>No. ${it.n}${it.label ? " — " + esc(it.label) : ""}</h3><span class="mut small">tanpa bobot pada rubrik</span></div><div class="qt small">${esc(it.q)}</div>${ansBox((ans.txt || {})[it.n])}</div>`).join("");
-    }).join("");
-  }
+      + free.map(it => `<div class="gi"><div class="gh"><h3>No. ${it.n}${it.label ? " · " + esc(it.label) : ""}</h3><span class="mut small">tanpa bobot pada rubrik</span></div><div class="qt small">${esc(it.q)}</div>${ansBox((ans.txt || {})[it.n])}</div>`).join("");
+  }).join("");
   const c = calc(a, cur.draft);
   if (!lock) h += `<div class="gsave"><span class="small mut">Rubrik terisi <b>${c.done}/${c.need}</b> · nilai ${c.final || c.done === c.need ? "akhir" : "sementara"} <b>${c.total}</b>/100</span><span class="small" id="grSt">Perubahan skor tersimpan otomatis</span></div>`;
   $("#pn").innerHTML = h;
@@ -1067,7 +1092,7 @@ function itemStats(list, bk) {
     const n = it.n, tf = it.kind === "tf", d = tf ? { B: 0, S: 0, _: 0 } : { A: 0, B: 0, C: 0, D: 0, _: 0 };
     list.forEach(a => { const v = String(((a.answers || {})[tf ? "tf" : "mc"] || {})[n] || "").toUpperCase(); if (v && d[v] !== undefined) d[v]++; else d._++; });
     const k = tf ? cf.tf[n] : cf.mc[n], p = list.length ? Math.round(d[k] / list.length * 100) : 0;
-    return { n, q: it.q, o: it.o, tf, d, k, p, comp: tf ? "B/S" : (cf.comp || {})[n] || "—", flags: list.filter(a => flOf(a).includes(n)).length };
+    return { n, q: it.q, o: it.o, tf, d, k, p, comp: tf ? "B/S" : (cf.comp || {})[n] || "-", flags: list.filter(a => flOf(a).includes(n)).length };
   });
 }
 function renderAnal() {
@@ -1096,7 +1121,7 @@ function renderAnal() {
         }).join("")}</tbody></table></div>` : `<div class="card empty">Belum ada peserta yang selesai dinilai.</div>`);
   }
   $("#anal").innerHTML = bankBar
-    + `<div class="stats s4">${stat("Peserta", fin.length, esc(bk.label))}${stat("Rata-rata benar", it.length ? Math.round(it.reduce((t, x) => t + x.p, 0) / it.length) + "%" : "—", bk.manual ? "soal pilihan ganda & benar/salah" : "", true)}${stat("Soal sulit", hard, "&lt; 50% peserta benar")}${stat("Soal mudah", easy, "≥ 80% peserta benar")}</div>
+    + `<div class="stats s4">${stat("Peserta", fin.length, esc(bk.label))}${stat("Rata-rata benar", it.length ? Math.round(it.reduce((t, x) => t + x.p, 0) / it.length) + "%" : "-", bk.manual ? "soal pilihan ganda & benar/salah" : "", true)}${stat("Soal sulit", hard, "&lt; 50% peserta benar")}${stat("Soal mudah", easy, "≥ 80% peserta benar")}</div>
     <h2 style="margin:8px 0 12px">Per area</h2><div class="areas">${areas}</div>
     <div class="bar"><h2 style="margin-right:auto">Per soal${bk.manual ? " (dinilai otomatis)" : ""}</h2>
       <select id="anArea" aria-label="Filter area"><option value="all">Semua area</option>${Object.keys(byArea).map(k => `<option value="${esc(k)}" ${an.area === k ? "selected" : ""}>${esc(areaName(k))}</option>`).join("")}</select>
@@ -1106,7 +1131,7 @@ function renderAnal() {
       return `<tr><td>${x.n}</td><td>${esc(x.q)}<div class="mut small">${esc(x.comp)} · kunci ${x.tf ? (x.k === "B" ? "Benar" : "Salah") : x.k}${x.flags ? ` · ${x.flags} peserta ragu-ragu` : ""}</div></td>
         <td class="nw"><div class="pb" style="min-width:120px"><div class="pbar ${x.p < 50 ? "bad" : x.p < 80 ? "" : "ok"}"><i style="width:${x.p}%"></i></div><span class="small">${x.p}%</span></div></td>
         <td><span class="lvl ${lc}">${lt}</span></td>
-        <td><div class="dist">${keys.map(l => `<span class="${l === x.k ? "k" : x.d[l] > x.d[x.k] ? "hot" : ""}" title="${esc(title(l))}">${l} ${x.d[l]}</span>`).join("")}<span title="Tidak dijawab">– ${x.d._}</span></div></td></tr>`;
+        <td><div class="dist">${keys.map(l => `<span class="${l === x.k ? "k" : x.d[l] > x.d[x.k] ? "hot" : ""}" title="${esc(title(l))}">${l} ${x.d[l]}</span>`).join("")}<span title="Tidak dijawab">- ${x.d._}</span></div></td></tr>`;
     }).join("")}</tbody></table></div>
     <p class="hint">Hijau: kunci jawaban. Merah: pengecoh yang dipilih lebih banyak peserta daripada kunci (indikasi miskonsepsi atau soal ambigu).</p>${rubric}`;
   $$("#anBank button").forEach(b => b.classList.toggle("on", b.dataset.v === an.bank));
@@ -1176,7 +1201,7 @@ function renderClauseAnal(fin, bankBar) {
   const it = clauseStats(fin), cs = fin.map(a => calc(a)).filter(Boolean), byMain = {};
   it.forEach(x => { const m = x.n.split(".")[0], b = byMain[m] = byMain[m] || { r: 0, a: 0, k: 0 }; b.r += x.r1 + x.r2; b.a += x.a1 + x.a2; b.k++; });
   if (an.area !== "all" && !byMain[an.area]) an.area = "all";
-  const avgP = k => { const t = cs.reduce((s, c) => s + c.pmax[k], 0); return t ? Math.round(cs.reduce((s, c) => s + c.parts[k], 0) / t * 100) + "%" : "—"; };
+  const avgP = k => { const t = cs.reduce((s, c) => s + c.pmax[k], 0); return t ? Math.round(cs.reduce((s, c) => s + c.parts[k], 0) / t * 100) + "%" : "-"; };
   let list = an.area === "all" ? it : it.filter(x => x.n.split(".")[0] === an.area);
   if (an.sort === "hard") list = [...list].sort((a, b) => a.p - b.p || cmpNum(a.n, b.n));
   if (an.sort === "easy") list = [...list].sort((a, b) => b.p - a.p || cmpNum(a.n, b.n));
@@ -1191,7 +1216,7 @@ function renderClauseAnal(fin, bankBar) {
       <div class="seg" id="anSort"><button data-v="no">Nomor</button><button data-v="hard">Tersulit</button><button data-v="easy">Termudah</button></div></div>
     <div class="tw"><table class="qx"><thead><tr><th>Klausul</th><th>Judul</th><th>Jenis 1 · nomor → judul</th><th>Jenis 2 · judul → nomor</th><th>Tingkat</th></tr></thead><tbody>${list.map(x => {
       const [lt, lc] = lvl(x.p), w = [x.a1 && topWrong(x.w1) ? `Jenis 1: ${esc(topWrong(x.w1))}` : "", x.a2 && topWrong(x.w2) ? `Jenis 2: ${esc(topWrong(x.w2))}` : ""].filter(Boolean).join(" · ");
-      return `<tr><td>${esc(x.n)}</td><td>${esc(x.title)}${w || x.flags ? `<div class="mut small">${w ? "Salah terbanyak — " + w : ""}${x.flags ? `${w ? " · " : ""}${x.flags}× ragu-ragu` : ""}</div>` : ""}</td>
+      return `<tr><td>${esc(x.n)}</td><td>${esc(x.title)}${w || x.flags ? `<div class="mut small">${w ? "Salah terbanyak - " + w : ""}${x.flags ? `${w ? " · " : ""}${x.flags}× ragu-ragu` : ""}</div>` : ""}</td>
         <td>${cell(x.p1, x.r1, x.a1)}</td><td>${cell(x.p2, x.r2, x.a2)}</td><td><span class="lvl ${lc}">${lt}</span></td></tr>`;
     }).join("") || `<tr><td colspan="5"><div class="empty">Belum ada data.</div></td></tr>`}</tbody></table></div>
     <p class="hint">Persentase dihitung dari peserta yang mendapat klausul tersebut (soal diundi per peserta). "Salah terbanyak" membantu melihat klausul yang sering tertukar.</p>`;
@@ -1371,13 +1396,21 @@ async function exportXlsx() {
     if (BANKS[ver].kind === "clause") { exportClause(wb, items, multi ? ` (${BANKS[ver].short})` : ""); continue; }
     if (BANKS[ver].essay) { exportEssay(wb, BANKS[ver], items, multi ? ` (${BANKS[ver].short})` : ""); continue; }
     const bk = BANKS[ver], cf = cfgOf(bk), sfx = multi ? ` (${bk.short})` : "";
-    const codeMax = {}; if (cf) Object.values(cf.comp || {}).forEach(c => codeMax[c] = (codeMax[c] || 0) + (bk.manual ? 2 : 1));
+    const codeMax = {}; if (cf) Object.values(cf.comp || {}).forEach(c => codeMax[c] = (codeMax[c] || 0) + (bk.manual ? mcPts(cf) : 1));
+    // bank campuran: skor maksimum tiap bagian dihitung dari kunci & rubrik (bank 50 soal: A 50, B 10, C 20, D 20)
+    const mix50 = ver === MIX, pk = Object.keys(bk.parts || {}), pmx = {};
+    if (bk.manual && cf) {
+      const partN = n => (bk.sections[(bk.item[n] || {}).sec] || {}).part, ad = (k, v) => { if (k !== undefined) pmx[k] = (pmx[k] || 0) + v; };
+      Object.keys(cf.mc || {}).forEach(n => ad(partN(n), mcPts(cf))); Object.keys(cf.tf || {}).forEach(n => ad(partN(n), tfPts(cf))); (cf.manual || []).forEach(m => ad(m.sec, m.max));
+    }
+    const tmx = Object.values(pmx).reduce((t, x) => t + x, 0);
     const codes = Object.keys(codeMax), w1 = wb.addWorksheet("Rekap Nilai" + sfx), w2 = wb.addWorksheet("Detail Jawaban" + sfx), sheets = [w1, w2];
     if (!bk.manual) {
       cols(w1, [...baseCols, ["Benar", 9], ["Nilai (/100)", 12], ["Kategori", 24], ["Nilai lulus", 10], ["Lulus", 12], ...codes.map(c => [`${c} (/${codeMax[c]})`, 12]), ...monCols]);
       cols(w2, [["Nama", 24], ["Jabatan", 20], ["Copart", 22], ["No", 6], ["Area", 10], ["Pertanyaan", 60], ["Jawaban peserta", 50], ["Kunci", 8], ["Poin", 8], ["Ragu-ragu", 10]]);
     } else {
-      cols(w1, [...baseCols, ["A (/50)", 9], ["B (/10)", 9], ["C (/20)", 9], ["D (/20)", 9], ["Total (/100)", 12], ["Kategori", 24], ["Nilai lulus", 10], ["Lulus", 12], ["Knowledge (/60)", 13], ["Application (/20)", 14], ["Transition (/20)", 13], ["Catatan guardrail", 30], ["Rubrik terisi", 12], ...codes.map(c => [`${c} (/${codeMax[c]})`, 12]), ...monCols]);
+      cols(w1, [...baseCols, ...pk.map(k => [`${k} (/${pmx[k] || 0})`, 9]), ...(mix50 ? [] : [[`Skor (/${tmx})`, 10]]), ["Nilai (/100)", 12], ["Kategori", 24], ["Nilai lulus", 10], ["Lulus", 12],
+        ...(mix50 ? [["Knowledge (/60)", 13], ["Application (/20)", 14], ["Transition (/20)", 13], ["Catatan guardrail", 30]] : []), ["Rubrik terisi", 12], ...codes.map(c => [`${c} (/${codeMax[c]})`, 12]), ...monCols]);
       cols(w2, [["Nama", 24], ["Jabatan", 20], ["Copart", 22], ["No", 6], ["Bagian", 8], ["Area", 22], ["Pertanyaan", 50], ["Jawaban peserta", 60], ["Kunci", 8], ["Poin otomatis", 12], ["Ragu-ragu", 10]]);
     }
     const w3 = bk.manual ? wb.addWorksheet("Penilaian Rubrik" + sfx) : null;
@@ -1385,15 +1418,16 @@ async function exportXlsx() {
     items.forEach((a, i) => {
       const c = scored(a) ? calc(a) : null, ans = a.answers || {}, fl = flOf(a), fin = c && c.final;
       if (!bk.manual) w1.addRow([...baseVals(a, i, bk), ...(fin ? [c.right, c.total, c.cat, c.pm, c.pass ? "Lulus" : "Belum lulus", ...codes.map(k => (c.comp[k] || { got: 0 }).got)] : ["", "", "", passMark(a), "", ...codes.map(() => "")]), ...monVals(a)]);
-      else w1.addRow([...baseVals(a, i, bk), ...(c ? [c.parts.A, c.parts.B, c.parts.C, c.parts.D, fin ? c.total : "", fin ? c.cat : "Menunggu penilaian", c.pm, fin ? (c.pass ? "Lulus" : "Belum lulus") : "",
-        c.parts.A + c.parts.B, c.parts.C, c.parts.D, fin && c.flag ? "Application < 60% — tinjau sebelum dinyatakan kompeten" : "", `${c.done}/${c.need}`, ...codes.map(k => (c.comp[k] || { got: 0 }).got)] : ["", "", "", "", "", "", passMark(a), "", "", "", "", "", "", ...codes.map(() => "")]), ...monVals(a)]);
+      else w1.addRow([...baseVals(a, i, bk), ...(c ? [...pk.map(k => c.parts[k] || 0), ...(mix50 ? [] : [c.got]), fin ? c.total : "", fin ? c.cat : "Menunggu penilaian", c.pm, fin ? (c.pass ? "Lulus" : "Belum lulus") : "",
+        ...(mix50 ? [c.parts.A + c.parts.B, c.parts.C, c.parts.D, fin && c.flag ? "Application < 60% - tinjau sebelum dinyatakan kompeten" : ""] : []), `${c.done}/${c.need}`, ...codes.map(k => (c.comp[k] || { got: 0 }).got)]
+        : [...pk.map(() => ""), ...(mix50 ? [] : [""]), "", "", passMark(a), "", ...(mix50 ? ["", "", "", ""] : []), "", ...codes.map(() => "")]), ...monVals(a)]);
       if (!c) return;
       bk.items.forEach(it => {
         const n = it.n, f = fl.includes(n) ? "Ya" : "";
         if (!bk.manual) { const v = (ans.mc || {})[n] || "", k = cf.mc[n]; return w2.addRow([a.name, a.job_title, a.copart || "", n, (cf.comp || {})[n] || "", it.q, v ? `${v}. ${it.o[L.indexOf(v)] || ""}` : "", k, v === k ? 1 : 0, f]); }
         const part = bk.sections[it.sec].part;
-        if (it.kind === "mc") { const v = (ans.mc || {})[n] || "", k = cf.mc[n]; w2.addRow([a.name, a.job_title, a.copart || "", n, part, (cf.comp || {})[n] || "", it.q, v ? `${v}. ${it.o[L.indexOf(v)] || ""}` : "", k, v === k ? 2 : 0, f]); }
-        else if (it.kind === "tf") { const v = (ans.tf || {})[n] || "", k = cf.tf[n]; w2.addRow([a.name, a.job_title, a.copart || "", n, part, "Benar/Salah", it.q, (v === "B" ? "Benar" : v === "S" ? "Salah" : "") + ((ans.tfr || {})[n] ? " — " + ans.tfr[n] : ""), k === "B" ? "Benar" : "Salah", v === k ? 1 : 0, f]); }
+        if (it.kind === "mc") { const v = (ans.mc || {})[n] || "", k = cf.mc[n]; w2.addRow([a.name, a.job_title, a.copart || "", n, part, (cf.comp || {})[n] || "", it.q, v ? `${v}. ${it.o[L.indexOf(v)] || ""}` : "", k, v === k ? mcPts(cf) : 0, f]); }
+        else if (it.kind === "tf") { const v = (ans.tf || {})[n] || "", k = cf.tf[n]; w2.addRow([a.name, a.job_title, a.copart || "", n, part, "Benar/Salah", it.q, (v === "B" ? "Benar" : v === "S" ? "Salah" : "") + ((ans.tfr || {})[n] ? ". Alasan: " + ans.tfr[n] : ""), k === "B" ? "Benar" : "Salah", v === k ? tfPts(cf) : 0, f]); }
         else w2.addRow([a.name, a.job_title, a.copart || "", n, part, it.label || bk.sections[it.sec].name, it.q, (ans.txt || {})[n] || "", "", "", f]);
       });
       if (w3 && scored(a)) cf.manual.forEach(m => w3.addRow([a.name, a.job_title, a.copart || "", m.sec, m.label, (a.manual_scores || {})[m.id] ?? "", m.max]));
@@ -1412,5 +1446,9 @@ async function exportXlsx() {
   const el = document.createElement("a"); el.href = url; const bn = [bf === "all" ? "" : fLabel(bf), ...lfLabels().map(t => t.split(" (")[0])].filter(Boolean).join(" "), slug = bn ? "_" + bn.replace(/[^A-Za-z0-9]+/g, "_").replace(/^_|_$/g, "") : "";
   el.download = "Hasil_Training_Exam" + slug + "_" + new Date().toISOString().slice(0, 10) + ".xlsx"; el.click(); URL.revokeObjectURL(url);
 }
+// ---- halaman Bank soal (assets/bank-editor.js) ----
+const BE = window.BankEditor({ esc, $, $$, BANKS, sb: () => sb, cfg: v => CFGS[v], rows: () => rows, batches: () => batches, href, nav,
+  batchBank: b => bankOfBatch(b).version, attemptBank: a => (bankOfA(a) || {}).version, hasTable: () => hasBankTable,
+  reloadBanks: async () => { await loadBanks(); paint(); } });
 init();
 })();

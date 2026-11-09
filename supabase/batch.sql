@@ -1,5 +1,5 @@
 -- =====================================================================
--- FITUR BATCH (per Copart) — jalankan di Supabase → SQL Editor.
+-- FITUR BATCH (per Copart) - jalankan di Supabase → SQL Editor.
 -- Aman dijalankan ulang. Untuk instalasi yang SUDAH berjalan, cukup jalankan file ini saja.
 -- =====================================================================
 

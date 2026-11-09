@@ -111,12 +111,12 @@ insert into public.grading_config (id, config) values (4, $cfg${
 }$cfg$::jsonb)
 on conflict (id) do update set config = excluded.config;
 
--- my_result: ditambah cabang bank esai (sama persis dengan supabase/settings.sql).
+-- my_result: cabang bank esai & bank campuran umum (sama persis dengan supabase/settings.sql dan supabase/bank_editor.sql).
 -- Bank esai: nilai tersedia setelah trainer selesai menilai; nilai = total skor rubrik / skor maksimum × 100.
 create or replace function public.my_result(p_attempt uuid) returns json
 language plpgsql stable security definer set search_path = public as $$
-declare a public.attempts; bs jsonb; k jsonb; d jsonb; n int; r int; n1 int; tfr int; man numeric; mx numeric; pm numeric; ver text; show boolean;
-  raw numeric; sc numeric; best numeric; kind text := 'mc';
+declare a public.attempts; bs jsonb; k jsonb; d jsonb; n int; r int; n1 int; tfr int; ntf int; man numeric; mx numeric; mp numeric; tp numeric;
+  pm numeric; ver text; show boolean; raw numeric; sc numeric; best numeric; kind text := 'mc';
 begin
   select * into a from public.attempts where id = p_attempt and user_id = auth.uid();
   if not found or a.status in ('in_progress', 'remedial') then return null; end if;
@@ -142,7 +142,7 @@ begin
     if n = 0 then return null; end if;
     raw := round(r * 100.0 / n, 1);
   elsif k ? 'essay' then
-    -- bank esai (Training IMS): seluruh soal dinilai trainer dengan rubrik
+    -- bank esai (mis. Training IMS): seluruh soal dinilai trainer dengan rubrik
     if a.status <> 'graded' then return json_build_object('pending', true); end if;
     kind := 'essay';
     select coalesce(sum(nullif(a.manual_scores ->> (m ->> 'id'), '')::numeric), 0), coalesce(sum((m ->> 'max')::numeric), 0)
@@ -152,16 +152,21 @@ begin
     raw := round(man * 100.0 / mx, 1);
   else
     select count(*), count(*) filter (where upper(coalesce(a.answers -> 'mc' ->> e.key, '')) = e.value)
-      into n, r from jsonb_each_text(k -> 'mc') e;
-    if n = 0 then return null; end if;
+      into n, r from jsonb_each_text(coalesce(k -> 'mc', '{}'::jsonb)) e;
     if k ? 'manual' then
-      -- bank dengan penilaian manual: nilai baru tersedia setelah trainer selesai menilai
+      -- bank campuran (PG + benar/salah + rubrik trainer): nilai baru tersedia setelah trainer selesai menilai
       if a.status <> 'graded' then return json_build_object('pending', true); end if;
       kind := 'manual';
-      select count(*) filter (where coalesce(a.answers -> 'tf' ->> e.key, '') = e.value) into tfr from jsonb_each_text(coalesce(k -> 'tf', '{}'::jsonb)) e;
-      select coalesce(sum(nullif(a.manual_scores ->> (m ->> 'id'), '')::numeric), 0) into man from jsonb_array_elements(k -> 'manual') m;
-      raw := r * 2 + tfr + man;
+      mp := coalesce((k ->> 'mc_pts')::numeric, 2); tp := coalesce((k ->> 'tf_pts')::numeric, 1);
+      select count(*), count(*) filter (where coalesce(a.answers -> 'tf' ->> e.key, '') = e.value)
+        into ntf, tfr from jsonb_each_text(coalesce(k -> 'tf', '{}'::jsonb)) e;
+      select coalesce(sum(nullif(a.manual_scores ->> (m ->> 'id'), '')::numeric), 0), coalesce(sum((m ->> 'max')::numeric), 0)
+        into man, mx from jsonb_array_elements(coalesce(k -> 'manual', '[]'::jsonb)) m;
+      mx := n * mp + ntf * tp + mx;
+      if mx = 0 then return null; end if;
+      raw := round((r * mp + tfr * tp + man) * 100.0 / mx, 1);
     else
+      if n = 0 then return null; end if;
       raw := round(r * 100.0 / n, 1);
     end if;
   end if;

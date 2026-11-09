@@ -1,5 +1,5 @@
 -- =====================================================================
--- COPART → TRAINING → BATCH — jalankan di Supabase → SQL Editor SETELAH supabase/settings.sql.
+-- COPART → TRAINING → BATCH - jalankan di Supabase → SQL Editor SETELAH supabase/settings.sql.
 -- Alur admin: buat Copart → buat Training di Copart tersebut → buat Batch (test) di Training.
 -- Satu Copart dapat memiliki banyak Training; satu Training dapat memiliki banyak Batch.
 -- Laporan rekap nilai per Training diekspor dari konsol trainer (tab Training).
@@ -115,7 +115,7 @@ end $$;
 revoke execute on function public.create_batch(uuid, text, text, int, jsonb, timestamptz, timestamptz) from public, anon;
 grant execute on function public.create_batch(uuid, text, text, int, jsonb, timestamptz, timestamptz) to authenticated;
 
--- 7) Peserta: cek kode — ditambah nama Training dan nama batch untuk ditampilkan di halaman awal
+-- 7) Peserta: cek kode - ditambah nama Training dan nama batch untuk ditampilkan di halaman awal
 drop function if exists public.get_batch(text);
 create or replace function public.get_batch(p_code text)
 returns table (copart text, is_open boolean, duration_minutes int, settings jsonb, open_from timestamptz, open_until timestamptz, training text, batch_name text)

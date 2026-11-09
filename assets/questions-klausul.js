@@ -1,7 +1,7 @@
 // Bank soal ketiga (publik): hafalan klausul ISO 9001:2026 (Edisi 6).
-//   Jenis 1 — nomor klausul ditampilkan, peserta menuliskan judul (keterangan) klausul.
-//   Jenis 2 — judul klausul ditampilkan, peserta menuliskan nomor klausul.
-// Kunci (pasangan nomor ↔ judul) TIDAK ada di sini — tersimpan di database (grading_config, baris id = 3). Lihat supabase/bank_klausul.sql.
+//   Jenis 1 - nomor klausul ditampilkan, peserta menuliskan judul (keterangan) klausul.
+//   Jenis 2 - judul klausul ditampilkan, peserta menuliskan nomor klausul.
+// Kunci (pasangan nomor ↔ judul) TIDAK ada di sini - tersimpan di database (grading_config, baris id = 3). Lihat supabase/bank_klausul.sql.
 // Urutan & ID judul sengaja diacak. Soal yang ditanyakan ke tiap peserta diundi server saat peserta mulai (pengaturan batch).
 window.EXAM_KLAUSUL = {
   version: "klausul-2026-v1",

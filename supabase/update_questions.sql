@@ -213,7 +213,7 @@ insert into public.grading_config (id, config) values (1, $cfg${
  },
  "exp": {
   "1": "QMS berorientasi pada pemenuhan persyaratan produk/jasa, customer satisfaction, serta pengelolaan dan improvement.",
-  "2": "Persyaratan utama sistem berada pada Klausul 4–10.",
+  "2": "Persyaratan utama sistem berada pada Klausul 4-10.",
   "3": "PDCA dapat diterapkan pada seluruh proses dan QMS secara keseluruhan.",
   "4": "Risk-based thinking bukan berarti menghilangkan seluruh risiko.",
   "5": "Process approach melihat proses sebagai aktivitas yang saling terkait dan berinteraksi untuk menghasilkan hasil yang dimaksudkan.",
@@ -316,5 +316,5 @@ insert into public.grading_config (id, config) values (1, $cfg${
 }$cfg$::jsonb)
 on conflict (id) do update set config = excluded.config;
 
--- OPSIONAL — hapus data peserta uji/versi lama (JANGAN dijalankan bila ada data peserta asli yang masih diperlukan):
+-- OPSIONAL - hapus data peserta uji/versi lama (JANGAN dijalankan bila ada data peserta asli yang masih diperlukan):
 -- delete from public.attempts;

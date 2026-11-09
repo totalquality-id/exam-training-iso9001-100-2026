@@ -1,4 +1,4 @@
-# Panduan Setup — Total Quality Training Exam (ISO 9001:2026)
+# Panduan Setup - Total Quality Training Exam (ISO 9001:2026)
 
 Aplikasi statis (HTML/JS) + Supabase. Tidak ada server yang perlu Anda kelola. Satu aplikasi dan satu database melayani **empat bank soal** yang dipilih per batch:
 
@@ -9,6 +9,28 @@ Aplikasi statis (HTML/JS) + Supabase. Tidak ada server yang perlu Anda kelola. S
 | **Hafalan klausul ISO 9001:2026** | Jenis 1: nomor → judul klausul · Jenis 2: judul → nomor (78 klausul, Edisi 6) | Otomatis dengan toleransi salah ketik + regex padanan kata Indonesia/Inggris; trainer dapat mengoreksi per soal | 60 menit |
 | **Training IMS** | 7 studi kasus × 3 soal esai (5S, Kaizen, Lean waste, VAA/NVAA, gap kompetensi, KSA, talent management) | Seluruhnya dinilai trainer dengan rubrik 0 sampai 4 per soal; nilai = total skor / 84 × 100 | 90 menit |
 
+## Membuat & mengubah soal sendiri (halaman Bank soal)
+Aktifkan sekali: Supabase → **SQL Editor** → jalankan `supabase/bank_editor.sql` (tabel `question_banks`, fungsi `save_bank`, `set_bank_active`, `delete_bank`, dan pembaruan `my_result`). Aman dijalankan ulang. Lalu deploy ulang situs dan login ulang di `admin.html`.
+
+Menu **Bank soal** di sidebar admin berisi semua bank soal beserta jumlah batch dan peserta yang memakainya.
+
+**Bank Soal Baru**: pilih pola, beri nama, lalu isi soal di editor. Tiga pola mengikuti bank yang sudah ada:
+| Pola | Mengikuti | Isi | Penilaian |
+|---|---|---|---|
+| Pilihan ganda | bank 100 soal | Bagian per area (kode area), soal 4 pilihan A sampai D, kunci, pembahasan opsional | Otomatis, 1 poin per soal |
+| Campuran | bank 50 soal | Bagian bebas berisi soal PG, Benar/Salah + alasan, dan studi kasus esai | PG & B/S otomatis (poin diatur), alasan & esai dengan rubrik trainer |
+| Esai studi kasus | bank Training IMS | Tiap bagian satu kasus dengan beberapa soal esai, skala skor untuk trainer | Seluruhnya rubrik trainer |
+
+Nilai bank campuran dan esai = total skor / skor maksimum × 100 (skor maksimum tampil di bawah editor). Rubrik bernilai 0 berarti soal/alasan tersebut tidak dinilai. Setelah disimpan, bank langsung muncul di pilihan **Bank soal** saat membuat batch, dan peserta mengerjakannya dengan tampilan yang sama seperti bank lain.
+
+**Ubah soal**: teks soal, pilihan, kunci, area, pembahasan, kasus, dan kriteria rubrik dapat diubah kapan saja. Struktur (menambah, menghapus, atau memindah soal, poin, dan skor maksimum rubrik) dikunci untuk:
+- bank bawaan (100 soal, 50 soal, Training IMS), karena nomor soalnya terikat dengan file soal dan kunci asli; perubahan teks disimpan di database, file `assets/questions*.js` tidak berubah;
+- bank buatan admin yang sudah dikerjakan peserta, karena jawaban tersimpan per nomor soal.
+
+Untuk mengubah struktur bank tersebut, gunakan **Duplikat**: salinannya menjadi bank baru yang bebas diubah. Perubahan kunci dan rubrik langsung memengaruhi nilai peserta yang sudah mengerjakan bank itu.
+
+**Arsipkan** menyembunyikan bank buatan admin dari pilihan batch baru tanpa menghapus data peserta. **Hapus** hanya untuk bank buatan admin yang belum dipakai batch maupun peserta. Bank hafalan klausul memiliki pola khusus (soal diundi) sehingga tidak dapat diubah lewat editor.
+
 ## Menambahkan bank Training IMS (instalasi yang sudah berjalan)
 1. Supabase → **SQL Editor** → jalankan `supabase/bank_ims.sql` (rubrik bank IMS di baris keempat `grading_config` + pembaruan fungsi `my_result` untuk bank esai). Aman dijalankan ulang; tidak perlu menjalankan ulang `settings.sql`/`training.sql`.
 2. Deploy ulang situs, lalu login ulang di `admin.html`. **Batch Baru → Bank soal** kini berisi pilihan **Training IMS (7 studi kasus, esai)**.
@@ -16,14 +38,14 @@ Aplikasi statis (HTML/JS) + Supabase. Tidak ada server yang perlu Anda kelola. S
 
 > Dropdown Filter, Training (form batch), dan Bank soal kini memiliki kolom pencarian: ketik nama Copart, training, batch, atau kode 6 angka.
 
-## Untuk instalasi yang sudah berjalan — yang perlu dilakukan sekarang
+## Untuk instalasi yang sudah berjalan - yang perlu dilakukan sekarang
 Jalankan di Supabase → **SQL Editor** (semua aman dijalankan ulang; data peserta & batch tidak dihapus):
-1. `supabase/settings.sql` — **jalankan ulang walaupun sudah pernah**. Versi ini menambah kolom & fungsi **remidi**, **undian soal bank klausul**, dan memperbarui `my_result` (nilai klausul & nilai setelah remidi).
-2. `supabase/bank_mix50.sql` — kunci & rubrik bank 50 soal (lewati bila sudah pernah).
-3. `supabase/bank_klausul.sql` — kunci bank hafalan klausul (baris ketiga `grading_config`).
+1. `supabase/settings.sql` - **jalankan ulang walaupun sudah pernah**. Versi ini menambah kolom & fungsi **remidi**, **undian soal bank klausul**, dan memperbarui `my_result` (nilai klausul & nilai setelah remidi).
+2. `supabase/bank_mix50.sql` - kunci & rubrik bank 50 soal (lewati bila sudah pernah).
+3. `supabase/bank_klausul.sql` - kunci bank hafalan klausul (baris ketiga `grading_config`).
 > **Pembaruan penilaian regex bank klausul**: jalankan ulang berurutan `settings.sql` → `bank_klausul.sql` → `training.sql`. `bank_klausul.sql` membutuhkan fungsi baru di `settings.sql` (`clause_tok`), jadi harus sesudahnya.
 
-4. `supabase/training.sql` — **baru**: Copart → Training → Batch dan laporan rekap per Training. Batch lama otomatis dikelompokkan (lihat *Copart, Training, dan Batch*). Jalankan **setelah** `settings.sql`; bila `settings.sql` dijalankan ulang di kemudian hari, jalankan ulang `training.sql` sesudahnya.
+4. `supabase/training.sql` - **baru**: Copart → Training → Batch dan laporan rekap per Training. Batch lama otomatis dikelompokkan (lihat *Copart, Training, dan Batch*). Jalankan **setelah** `settings.sql`; bila `settings.sql` dijalankan ulang di kemudian hari, jalankan ulang `training.sql` sesudahnya.
 5. Deploy ulang situs (Vercel otomatis setelah push), lalu login ulang di `admin.html`.
 
 Setelah itu, **Batch Baru → Bank soal** menampilkan ketiga pilihan. Bank yang kuncinya belum ada di database tampil nonaktif beserta nama file SQL yang perlu dijalankan.
@@ -41,6 +63,7 @@ Setelah itu, **Batch Baru → Bank soal** menampilkan ketiga pilihan. Bank yang 
 | `assets/questions-klausul.js` | Bank hafalan klausul: daftar nomor & daftar judul ber-ID acak (tanpa pasangan kunci) |
 | `assets/questions-ims.js` | Bank Training IMS: 7 studi kasus, 21 soal esai (tanpa rubrik) |
 | `assets/combo.js` | Dropdown dengan pencarian untuk daftar yang panjang di konsol trainer |
+| `assets/bank-editor.js` | Halaman Bank soal: daftar bank, bank baru per pola, editor soal/kunci/rubrik |
 | `assets/banks.js` | Daftar bank soal; menyeragamkan struktur semua bank untuk halaman peserta & admin, termasuk penilaian klausul |
 | `assets/icons.js` | Ikon yang dipakai halaman peserta & admin |
 | `assets/logo.png` | **Logo Anda** (lihat bagian Logo) |
@@ -52,36 +75,37 @@ Setelah itu, **Batch Baru → Bank soal** menampilkan ketiga pilihan. Bank yang 
 | `supabase/bank_mix50.sql` | Kunci jawaban & rubrik bank 50 soal campuran |
 | `supabase/bank_klausul.sql` | Kunci bank hafalan klausul (pasangan nomor ↔ judul) |
 | `supabase/bank_ims.sql` | Rubrik bank Training IMS + fungsi `my_result` untuk bank esai |
+| `supabase/bank_editor.sql` | Tabel `question_banks` dan fungsi untuk membuat/mengubah bank soal dari admin |
 | `supabase/update_questions.sql` | Mengganti kunci bank 100 soal (untuk instalasi lama) |
 
 ## Instalasi baru
-### Langkah 1 — Buat project Supabase
+### Langkah 1 - Buat project Supabase
 1. Masuk ke https://supabase.com → **New project**. Simpan database password Anda.
 2. Tunggu project selesai dibuat.
 
-### Langkah 2 — Atur Authentication
+### Langkah 2 - Atur Authentication
 1. **Authentication → Sign In / Providers** → aktifkan **Allow anonymous sign-ins** (peserta tidak perlu akun, tetapi jawabannya tetap terikat ke satu sesi).
 2. **Authentication → Users → Add user → Create new user**: isi email & password admin, centang **Auto Confirm User**. Email ini yang dipakai login di `admin.html`.
 
-### Langkah 3 — Jalankan SQL (urut)
+### Langkah 3 - Jalankan SQL (urut)
 1. Buka `supabase/schema.sql`, pastikan email admin di bagian `insert into public.admins` sama dengan email dari Langkah 2.
 2. Supabase → **SQL Editor → New query** → tempel seluruh isi file → **Run**. Harus muncul "Success".
-3. Jalankan dengan cara yang sama, berurutan: `supabase/batch.sql` → `supabase/settings.sql` → `supabase/bank_mix50.sql` → `supabase/bank_klausul.sql` → `supabase/training.sql` → `supabase/bank_ims.sql`.
+3. Jalankan dengan cara yang sama, berurutan: `supabase/batch.sql` → `supabase/settings.sql` → `supabase/bank_mix50.sql` → `supabase/bank_klausul.sql` → `supabase/training.sql` → `supabase/bank_ims.sql` → `supabase/bank_editor.sql`.
 4. Cek di **Table Editor**: ada tabel `attempts`, `batches`, `coparts`, `trainings`, `grading_config` (4 baris), `admins`.
 
 > Kunci jawaban, pembahasan, dan rubrik tersimpan di tabel `grading_config` dan hanya bisa dibaca akun admin. Peserta tidak dapat melihatnya lewat browser.
 
-### Langkah 4 — Isi kredensial
+### Langkah 4 - Isi kredensial
 1. Supabase → **Project Settings → API** (atau tombol **Connect**).
 2. Salin **Project URL** dan **anon / public key** ke `assets/config.js`.
 3. **Jangan pernah** memakai `service_role` key di file ini.
 
-### Langkah 5 — Publikasikan
+### Langkah 5 - Publikasikan
 Pilih salah satu hosting statis (gratis): Vercel, Netlify, Cloudflare Pages, atau GitHub Pages. Upload seluruh isi folder ini.
 - Peserta: `https://domain-anda/` (atau `index.html`)
 - Trainer: `https://domain-anda/admin.html`
 
-### Langkah 6 — Uji sebelum dipakai
+### Langkah 6 - Uji sebelum dipakai
 1. Di tab **Copart & Training** buat Copart uji, lalu Training uji, lalu **dua batch uji** di training itu: satu dengan bank 100 soal, satu dengan bank 50 soal.
 2. Untuk masing-masing, buka tautan peserta, isi beberapa jawaban (termasuk esai pada bank 50 soal), tutup tab, buka lagi (harus lanjut dari posisi terakhir), lalu kirim.
 3. Di `admin.html`: peserta bank 100 soal langsung **Selesai** dengan nilai; peserta bank 50 soal berstatus **Perlu dinilai**. Buka detailnya, isi rubrik sampai lengkap, pastikan status berubah menjadi **Selesai**. Coba **Ekspor Excel** dan **Ekspor Laporan** pada training uji.
@@ -94,13 +118,13 @@ Pilih salah satu hosting statis (gratis): Vercel, Netlify, Cloudflare Pages, ata
 4. Kartu batch dan judul halaman Peserta menampilkan bank soal yang dipakai.
 
 ## Alur penilaian bank 50 soal
-1. Setelah peserta mengirim, bagian otomatis langsung dihitung (A: 2 poin per PG, B: 1 poin per benar/salah yang tepat — maksimal 55 poin). Status peserta **Perlu dinilai**.
+1. Setelah peserta mengirim, bagian otomatis langsung dihitung (A: 2 poin per PG, B: 1 poin per benar/salah yang tepat - maksimal 55 poin). Status peserta **Perlu dinilai**.
 2. Daftar Peserta menampilkan **"Menunggu penilaian · otomatis x/55 · rubrik y/19"**. Gunakan filter **Perlu dinilai** atau lihat penanda di menu samping.
 3. Buka detail peserta → bagian **Jawaban & penilaian**, pilih tab:
-   - **A · Multiple Choice** — jawaban, kunci, dan hasil per soal (otomatis).
-   - **B · True/False + Reasoning** — jawaban B/S (otomatis) dan alasan peserta; beri skor alasan 0–1.
-   - **C · Case Analysis** — skenario, jawaban tiap kasus, dan kriteria rubrik; beri skor 0–4 per kasus.
-   - **D · Integrated Transition Case** — skenario terpadu dan jawaban No. 41–50; beri skor sesuai rubrik (No. 50 tanpa bobot).
+   - **A · Multiple Choice** - jawaban, kunci, dan hasil per soal (otomatis).
+   - **B · True/False + Reasoning** - jawaban B/S (otomatis) dan alasan peserta; beri skor alasan 0-1.
+   - **C · Case Analysis** - skenario, jawaban tiap kasus, dan kriteria rubrik; beri skor 0-4 per kasus.
+   - **D · Integrated Transition Case** - skenario terpadu dan jawaban No. 41-50; beri skor sesuai rubrik (No. 50 tanpa bobot).
 4. **Setiap perubahan skor tersimpan otomatis.** Bar di bawah menampilkan jumlah item rubrik terisi (19 item) dan nilai sementara.
 5. Begitu ke-19 item terisi, status otomatis menjadi **Selesai**, nilai akhir dan status lulus muncul, dan peserta ikut dihitung dalam rata-rata dan kelulusan. Mengosongkan salah satu skor mengembalikan status ke **Perlu dinilai**.
 6. Gunakan **Sebelumnya / Berikutnya** (atau tombol ← →) untuk berpindah antar peserta dengan cepat; filter **Perlu dinilai** membuat urutan ini hanya berisi peserta yang belum dinilai.
@@ -109,17 +133,17 @@ Pilih salah satu hosting statis (gratis): Vercel, Netlify, Cloudflare Pages, ata
 
 ## Bank hafalan klausul ISO 9001:2026
 Sumber: daftar klausul final Edisi 6 (78 klausul, 1 s.d. 10.2). Dua jenis soal isian singkat:
-- **Jenis 1 · Nomor → Judul** — peserta melihat "Klausul 7.1.4" dan menuliskan judulnya.
-- **Jenis 2 · Judul → Nomor** — peserta melihat "Lingkungan untuk Pengoperasian Proses" dan menuliskan "7.1.4". Judul **Umum** muncul di 8 klausul (5.1.1, 7.1.1, 7.5.1, 8.3.1, 8.4.1, 9.1.1, 9.2.1, 9.3.1), jadi selalu diberi petunjuk induknya ("bagian dari: Sumber Daya") agar jawabannya tunggal.
+- **Jenis 1 · Nomor → Judul** - peserta melihat "Klausul 7.1.4" dan menuliskan judulnya.
+- **Jenis 2 · Judul → Nomor** - peserta melihat "Lingkungan untuk Pengoperasian Proses" dan menuliskan "7.1.4". Judul **Umum** muncul di 8 klausul (5.1.1, 7.1.1, 7.5.1, 8.3.1, 8.4.1, 9.1.1, 9.2.1, 9.3.1), jadi selalu diberi petunjuk induknya ("bagian dari: Sumber Daya") agar jawabannya tunggal.
 
 **Pengaturan per batch** (muncul di form batch saat bank ini dipilih):
 | Pengaturan | Keterangan |
 |---|---|
-| Cakupan klausul utama | Klausul 1–10 yang diikutkan (mis. hanya 4–10). |
+| Cakupan klausul utama | Klausul 1-10 yang diikutkan (mis. hanya 4-10). |
 | Tingkat klausul | Klausul utama (4), sub-klausul (4.1), sub-sub-klausul (5.1.1). |
 | Jenis 1 / Jenis 2 aktif | Satu atau kedua jenis. |
 | Tampilkan semua nomor / semua keterangan | Aktif: semua klausul dalam cakupan ditanyakan. Mati: diundi sejumlah N klausul, **berbeda untuk setiap peserta**. |
-| Acak urutan | Jenis 1 bawaan berurutan (seperti daftar isi); Jenis 2 bawaan diacak — bila tidak diacak, nomor mudah ditebak dari posisinya. |
+| Acak urutan | Jenis 1 bawaan berurutan (seperti daftar isi); Jenis 2 bawaan diacak - bila tidak diacak, nomor mudah ditebak dari posisinya. |
 | Klausul berbeda untuk Jenis 1 & 2 | Saat sebagian diundi, Jenis 2 memakai klausul yang tidak ditanyakan di Jenis 1. |
 | Kerjakan berurutan | Jenis 2 baru terbuka setelah peserta menekan **Kunci Jenis 1 & Lanjut**; setelah itu jawaban Jenis 1 tidak dapat diubah. Mencegah daftar judul di Jenis 2 dipakai sebagai contekan Jenis 1. |
 
@@ -127,18 +151,18 @@ Sumber: daftar klausul final Edisi 6 (78 klausul, 1 s.d. 10.2). Dua jenis soal i
 - Soal tampil 20 per halaman; tombol Enter pindah ke kolom berikutnya.
 - **Penilaian awal otomatis**: 1 poin per soal, nilai = benar ÷ jumlah soal × 100.
   - **Jenis 1** (judul), berurutan: (1) huruf besar/kecil, tanda baca, dan "&"/"dan" diabaikan; sama dengan judul Indonesia **atau Inggris** (mis. *Customer focus*) → benar; salah ketik kecil (jarak edit ≤ 15% panjang judul) → benar. (2) **Regex padanan kata**: akhiran "-nya" dan kata sambung (dan, untuk, of, the, …) dibuang, kata Indonesia/Inggris/singkatan disamakan (*kualitas/quality → mutu*, *kontrol/control → pengendalian*, *SMM/QMS*, *RTM*, *SDM*, *NC*, …), lalu kata kuncinya dicocokkan tanpa memperhatikan urutan (per kata masih toleran salah ketik). Benar bila semua kata kunci cocok, atau minimal 2/3 kata kunci cocok tanpa kata lain (mis. *kontrol dokumen* untuk 7.5.3). Jawaban yang persis judul klausul lain selalu salah (mis. *Audit Internal* untuk 9.2.2, *Tindakan untuk Mengatasi Risiko* untuk 6.1).
-  - **Jenis 2** (nomor): angka diambil dengan regex — "Klausul 7.1.4.", "7,1,4", "7 1 4" dianggap "7.1.4"; nomor harus tepat.
+  - **Jenis 2** (nomor): angka diambil dengan regex - "Klausul 7.1.4.", "7,1,4", "7 1 4" dianggap "7.1.4"; nomor harus tepat.
   - Kamus padanan (`rx`) dan judul Inggris (`e1`) ada di `supabase/bank_klausul.sql`; tambah padanan baru di `rx.syn` lalu jalankan ulang file itu. Penilaian di konsol trainer dan nilai yang dilihat peserta memakai aturan yang sama.
 - **Koreksi trainer**: penilaian regex hanya membantu di awal. Kolom *Hasil* menjelaskan dasar penilaiannya (mis. *regex: 2/3 kata kunci*, *sama dengan judul klausul 9.2*); filter **Perlu dicek** menampilkan jawaban yang dinilai dari kemiripan. Bila kurang sesuai, klik **Anggap benar / Anggap salah**. Koreksi tersimpan otomatis, menimpa penilaian otomatis, ikut dihitung di nilai peserta, Excel (kolom *Penilaian otomatis* & *Koreksi trainer*), dan filter **Dikoreksi**.
-- Analisis soal untuk bank ini dihitung **per klausul** (karena tiap peserta mendapat soal berbeda), termasuk jawaban salah yang paling sering — berguna untuk melihat klausul yang sering tertukar.
+- Analisis soal untuk bank ini dihitung **per klausul** (karena tiap peserta mendapat soal berbeda), termasuk jawaban salah yang paling sering - berguna untuk melihat klausul yang sering tertukar.
 
 ## Remidi (peserta di bawah KKM)
-Remidi memakai **batch dan baris peserta yang sama** — tidak perlu membuat batch baru, dan nilai di batch langsung diperbarui setelah remidi selesai.
+Remidi memakai **batch dan baris peserta yang sama** - tidak perlu membuat batch baru, dan nilai di batch langsung diperbarui setelah remidi selesai.
 1. Tab **Batch** → tombol **Remidi (n)** pada kartu batch (n = peserta belum lulus), atau tombol **Buka remidi** di detail peserta. Filter **Belum lulus** dan **Remidi** tersedia di daftar Peserta.
 2. Pilih peserta → **Buka remidi**. Jawaban & nilai saat ini disimpan di **Riwayat percobaan**, lalu peserta berstatus **Remidi · belum mulai** dan mendapat **kode remidi 8 karakter**.
 3. Peserta memulai remidi dengan salah satu cara:
    - membuka halaman ujian di **perangkat yang sama** → muncul tombol **Mulai Remidi**;
-   - membuka **tautan remidi** (`https://domain-anda/?remidi=KODE`) atau memilih **Punya kode remidi?** di halaman awal — bisa dari perangkat mana pun.
+   - membuka **tautan remidi** (`https://domain-anda/?remidi=KODE`) atau memilih **Punya kode remidi?** di halaman awal - bisa dari perangkat mana pun.
 4. Timer mulai saat peserta menekan Mulai Remidi. Durasi & aturan diambil dari pengaturan batch saat itu; bank soal tetap sama dengan ujian awal (bank klausul: soal diundi ulang; bank PG: urutan acak baru). Batch yang sudah ditutup tetap bisa dipakai untuk remidi.
 5. Kode berlaku sekali; setelah dipakai, kode hangus. Remidi yang belum dimulai bisa **dibatalkan** (nilai sebelumnya dipulihkan). Remidi bisa dibuka lagi bila peserta masih belum lulus.
 
@@ -152,15 +176,15 @@ Remidi memakai **batch dan baris peserta yang sama** — tidak perlu membuat bat
 Daftar peserta, kartu, rata-rata, kelulusan, nilai yang dilihat peserta, dan Excel memakai nilai akhir ini. Detail peserta & Excel tetap menampilkan nilai awal dan nilai remidi mentahnya.
 
 ## Duplikat batch
-Tombol **Duplikat** pada kartu batch membuka form berisi salinan pengaturan (bank soal, durasi, nilai lulus, aturan ujian, pengaturan klausul, aturan remidi). Ubah nama batch atau pilih training lain bila perlu, lalu **Buat Salinan** — kode 6 angka baru dibuat otomatis. Peserta tidak ikut disalin; jadwal yang sudah lewat tidak disalin.
+Tombol **Duplikat** pada kartu batch membuka form berisi salinan pengaturan (bank soal, durasi, nilai lulus, aturan ujian, pengaturan klausul, aturan remidi). Ubah nama batch atau pilih training lain bila perlu, lalu **Buat Salinan** - kode 6 angka baru dibuat otomatis. Peserta tidak ikut disalin; jadwal yang sudah lewat tidak disalin.
 
 ## Data peserta lama
-Peserta yang dulu mengerjakan bank 50 soal sebelum sistem ini (sebelumnya tertulis **"Soal versi lama"**) kini dikenali otomatis sebagai bank 50 soal, berstatus **Perlu dinilai**, dan bisa dinilai dengan rubrik seperti biasa — setelah `bank_mix50.sql` dijalankan. Skor rubrik yang dulu sudah diisi tetap terbaca.
+Peserta yang dulu mengerjakan bank 50 soal sebelum sistem ini (sebelumnya tertulis **"Soal versi lama"**) kini dikenali otomatis sebagai bank 50 soal, berstatus **Perlu dinilai**, dan bisa dinilai dengan rubrik seperti biasa - setelah `bank_mix50.sql` dijalankan. Skor rubrik yang dulu sudah diisi tetap terbaca.
 
 ## Copart, Training, dan Batch
 Urutan pembuatan: **Copart → Training → Batch**. Satu Copart dapat memiliki banyak Training; satu Training dapat memiliki banyak Batch (misalnya Pre-test dan Post-test).
 1. Tab **Copart & Training → Copart Baru**: isi nama Copart. Form **Training Baru** langsung terbuka.
-2. **Training**: nama training, tanggal mulai–selesai, nilai minimal lulus laporan, kode formulir (mis. `FM-SDD-001`), kolom tanda tangan (Dibuat / Disetujui / Diketahui), dan catatan. Kode formulir dan tanda tangan terisi otomatis dari training sebelumnya di Copart yang sama (Copart baru hanya mewarisi kolom *Dibuat*). Setelah disimpan, form **Batch Baru** langsung terbuka.
+2. **Training**: nama training, tanggal mulai-selesai, nilai minimal lulus laporan, kode formulir (mis. `FM-SDD-001`), kolom tanda tangan (Dibuat / Disetujui / Diketahui), dan catatan. Kode formulir dan tanda tangan terisi otomatis dari training sebelumnya di Copart yang sama (Copart baru hanya mewarisi kolom *Dibuat*). Setelah disimpan, form **Batch Baru** langsung terbuka.
 3. **Batch**: pilih training, isi nama batch/test (bawaan `Test 1`, `Test 2`, …), bank soal, durasi, dan pengaturan lain; klik **Buat Batch**. Muncul kode 6 angka, misalnya `482915`.
 4. Bagikan **kode** atau **tautan** (tombol Salin tautan; peserta langsung masuk dengan kode terisi, misalnya `https://domain-anda/?kode=482915`). Peserta melihat nama Copart, training, batch, jumlah soal, dan durasi → mengisi nama dan jabatan.
 5. **Tutup batch** menghentikan pendaftaran peserta baru. Peserta yang sudah mulai tetap bisa menyelesaikan ujiannya.
@@ -168,7 +192,7 @@ Urutan pembuatan: **Copart → Training → Batch**. Satu Copart dapat memiliki 
 7. Batch dapat dipindah ke training lain lewat **Pengaturan → Training**. Nama Copart pada batch selalu mengikuti training-nya.
 8. **Hapus batch** hanya menghapus kodenya; data peserta tetap tersimpan, tetapi nilainya tidak lagi masuk laporan training. Training hanya dapat dihapus bila tidak berisi batch, dan Copart hanya bila tidak berisi training.
 
-**Batch lama** (dibuat sebelum `training.sql`): dikelompokkan otomatis — satu Copart per nama Copart, dengan satu training bernama **"Training sebelumnya"** yang tanggalnya diambil dari tanggal batch. Ganti nama/tanggalnya lewat **Ubah**, atau pindahkan batch ke training lain.
+**Batch lama** (dibuat sebelum `training.sql`): dikelompokkan otomatis - satu Copart per nama Copart, dengan satu training bernama **"Training sebelumnya"** yang tanggalnya diambil dari tanggal batch. Ganti nama/tanggalnya lewat **Ubah**, atau pindahkan batch ke training lain.
 
 ## Laporan rekap nilai per Training
 Tombol **Ekspor Laporan** pada training menghasilkan file *Rekap Penilaian Peserta - (training) (Copart) (tanggal).xlsx* dengan format seperti rekap penilaian manual:
@@ -183,11 +207,11 @@ Tombol **Ekspor Laporan** pada training menghasilkan file *Rekap Penilaian Peser
 | Pengaturan | Keterangan |
 |---|---|
 | Bank soal | 100 soal pilihan ganda atau 50 soal campuran. |
-| Durasi | 5–600 menit (tombol cepat 45/60/90/120/150). |
-| Nilai minimal lulus | 0–100, bawaan 70. Dipakai untuk status **Lulus / Belum lulus** di konsol, Excel, dan hasil peserta. |
+| Durasi | 5-600 menit (tombol cepat 45/60/90/120/150). |
+| Nilai minimal lulus | 0-100, bawaan 70. Dipakai untuk status **Lulus / Belum lulus** di konsol, Excel, dan hasil peserta. |
 | Dibuka mulai / Ditutup pada | Opsional. Di luar rentang ini peserta tidak bisa **mulai**; yang sudah mulai tetap bisa menyelesaikan. |
 | Acak urutan soal | Soal pilihan ganda diacak di dalam tiap bagian, berbeda per peserta tetapi tetap sama saat halaman dibuka ulang. Benar/salah dan studi kasus tidak diacak. Di konsol admin soal selalu memakai nomor bank soal. |
-| Acak pilihan jawaban | Urutan A–D diacak per peserta. Pilihan "Semua benar"/"Ketiganya" tetap di posisinya, dan soal yang pilihannya merujuk huruf lain (mis. "A dan B") tidak diacak. Penilaian tidak terpengaruh. |
+| Acak pilihan jawaban | Urutan A-D diacak per peserta. Pilihan "Semua benar"/"Ketiganya" tetap di posisinya, dan soal yang pilihannya merujuk huruf lain (mis. "A dan B") tidak diacak. Penilaian tidak terpengaruh. |
 | Tampilkan nilai ke peserta | Bank 100 soal: nilai tampil setelah mengirim. Bank 50 soal: nilai tampil setelah trainer selesai menilai. Dihitung di server; kunci jawaban tidak pernah dikirim ke browser peserta. |
 | Wajib menjawab semua soal | Tombol kirim terkunci sampai semua soal (termasuk esai) terjawab. Saat waktu habis jawaban tetap terkirim otomatis. |
 
@@ -198,12 +222,12 @@ Bank soal, durasi, pengacakan, dan wajib jawab semua disalin ke data peserta saa
 - Di Chrome/Edge, tombol Esc dan sebagian pintasan sistem ditahan (Keyboard Lock); Esc harus ditekan lama untuk keluar.
 - Teks soal tidak bisa diseleksi, disalin, dicetak, atau diklik kanan. Di kolom jawaban esai peserta bisa mengetik dan menyunting (pilih teks, Ctrl+Z, dsb.), tetapi **tidak bisa menempel (paste)** teks dari luar.
 - Setiap keluar halaman, lama di luar, dan keluar layar penuh **dicatat** serta tampil di konsol trainer dan Excel.
-- Jika browser peserta tidak mendukung atau menolak layar penuh (mis. iPhone, atau tautan dibuka dari dalam aplikasi chat), ujian tetap bisa dikerjakan dan peserta ditandai **"tanpa layar penuh"**. Sarankan peserta memakai Chrome/Edge di laptop — terutama untuk bank 50 soal yang berisi esai.
+- Jika browser peserta tidak mendukung atau menolak layar penuh (mis. iPhone, atau tautan dibuka dari dalam aplikasi chat), ujian tetap bisa dikerjakan dan peserta ditandai **"tanpa layar penuh"**. Sarankan peserta memakai Chrome/Edge di laptop - terutama untuk bank 50 soal yang berisi esai.
 - **Batasan:** situs web tidak dapat sepenuhnya mengunci perangkat. Alt+Tab, tombol Windows, Ctrl+Alt+Del, menutup browser, atau memotret layar dengan ponsel tetap mungkin. Untuk penguncian penuh diperlukan aplikasi khusus seperti Safe Exam Browser.
 
 ## Tampilan peserta
 - Halaman awal hanya berisi logo, judul, kode batch, lalu nama dan jabatan.
-- Soal ditampilkan **satu bagian per halaman**. Bank 50 soal: A (PG), B (benar/salah + kolom alasan), C1–C5 (setiap kasus satu halaman dengan skenario di atas), D (kasus terpadu).
+- Soal ditampilkan **satu bagian per halaman**. Bank 50 soal: A (PG), B (benar/salah + kolom alasan), C1-C5 (setiap kasus satu halaman dengan skenario di atas), D (kasus terpadu).
 - **Panel navigasi soal** (di ponsel: tombol di bawah layar): biru = terjawab, oranye = ragu-ragu, putih = belum. Esai dihitung terjawab bila kolomnya berisi teks.
 - Tombol **Ragu-ragu** pada tiap soal; ringkasan sebelum mengirim; pengingat saat sisa waktu 10, 5, dan 1 menit.
 
@@ -212,11 +236,11 @@ Bank soal, durasi, pengacakan, dan wajib jawab semua disalin ke data peserta saa
 - **Detail peserta**: breadcrumb, **Sebelumnya / Berikutnya**, pintasan `/` cari, `Esc` kembali, `←` `→` pindah peserta. Catatan trainer tersimpan otomatis.
 - **Peserta yang sedang mengerjakan**: **Tambah waktu** dan **Kirim paksa**.
 - **Analisis soal**: per bank soal (bila satu batch/filter berisi dua bank, ada tombol untuk berpindah bank). Persentase benar per area dan per soal (PG dan benar/salah), tingkat kesulitan, sebaran jawaban; untuk bank 50 soal ditambah **rata-rata skor tiap item rubrik**.
-- **Excel**: bila data berisi dua bank, sheet dipisah per bank — *Rekap Nilai*, *Detail Jawaban* (termasuk teks esai), *Penilaian Rubrik* (bank 50 soal), dan *Analisis Soal*.
+- **Excel**: bila data berisi dua bank, sheet dipisah per bank - *Rekap Nilai*, *Detail Jawaban* (termasuk teks esai), *Penilaian Rubrik* (bank 50 soal), dan *Analisis Soal*.
 
 ## Cara kerja penilaian
 - **Bank 100 soal**: 1 poin per soal, otomatis; total = benar/100 × 100.
-- **Bank 50 soal**: A = 2 × PG benar (maks. 50); B = benar/salah tepat (maks. 5) + skor alasan (maks. 5); C = 5 kasus × 4 (maks. 20); D = rubrik No. 41–49 (maks. 20). Total maks. 100.
+- **Bank 50 soal**: A = 2 × PG benar (maks. 50); B = benar/salah tepat (maks. 5) + skor alasan (maks. 5); C = 5 kasus × 4 (maks. 20); D = rubrik No. 41-49 (maks. 20). Total maks. 100.
 - Kategori nilai sama untuk kedua bank: EXCELLENT ≥ 90, VERY GOOD / COMPETENT ≥ 80, COMPETENT ≥ 70, NEEDS IMPROVEMENT ≥ 60, selainnya NOT YET COMPETENT.
 - Rekomendasi remedial muncul untuk area < 60% (ambang ini dapat diubah di `admin.js`).
 

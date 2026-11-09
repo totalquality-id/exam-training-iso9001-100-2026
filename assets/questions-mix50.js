@@ -1,9 +1,9 @@
-// Bank soal kedua (publik): 50 soal campuran — Section A pilihan ganda, B benar/salah + alasan, C studi kasus, D kasus terpadu.
-// Kunci jawaban & rubrik TIDAK ada di sini — tersimpan di database (grading_config, baris id = 2). Lihat supabase/bank_mix50.sql.
+// Bank soal kedua (publik): 50 soal campuran - Section A pilihan ganda, B benar/salah + alasan, C studi kasus, D kasus terpadu.
+// Kunci jawaban & rubrik TIDAK ada di sini - tersimpan di database (grading_config, baris id = 2). Lihat supabase/bank_mix50.sql.
 window.EXAM_MIX50 = {
   version: "mix50-2026-v1",
   title: "Final Assessment",
-  subtitle: "ISO 9001:2026 — Understanding Requirements, Implementation & Transition",
+  subtitle: "ISO 9001:2026 - Understanding Requirements, Implementation & Transition",
   training: "Training ISO 9001:2026",
   minutes: 75,
   mc: [

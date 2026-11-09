@@ -1,9 +1,9 @@
-// Bank soal (publik). Kunci jawaban & pembahasan TIDAK ada di sini — tersimpan di database (tabel grading_config).
+// Bank soal (publik). Kunci jawaban & pembahasan TIDAK ada di sini - tersimpan di database (tabel grading_config).
 // Sumber: 01_Master_Question_Bank_ISO_9001_2026.docx (100 soal pilihan ganda, 1 poin per soal).
 window.EXAM = {
   version: "qb100-2026-v1",
   title: "Final Assessment",
-  subtitle: "ISO 9001:2026 — Understanding Requirements, Implementation & Transition",
+  subtitle: "ISO 9001:2026 - Understanding Requirements, Implementation & Transition",
   training: "Training ISO 9001:2026",
   minutes: 90,
   areas: [
@@ -20,7 +20,7 @@ window.EXAM = {
   codes: {"FND": "Fundamental", "CTX": "Context", "LDR": "Leadership", "R&O": "Risk & Opportunity", "SUP": "Support & Documented Information", "OPS": "Operation", "PER": "Performance Evaluation", "PER/IMP": "Management Review & Improvement"},
   mc: [
     [1, "Tujuan utama sistem manajemen mutu adalah:", ["Menghasilkan sebanyak mungkin documented information", "Mendapatkan sertifikat ISO", "Meningkatkan kemampuan organisasi menyediakan produk/jasa yang memenuhi persyaratan serta meningkatkan kepuasan pelanggan", "Menghilangkan seluruh risiko"]],
-    [2, "Klausul utama persyaratan QMS ISO 9001:2026 terdapat pada:", ["Klausul 1–3", "Klausul 4–10", "Annex A", "Klausul 8–10"]],
+    [2, "Klausul utama persyaratan QMS ISO 9001:2026 terdapat pada:", ["Klausul 1-3", "Klausul 4-10", "Annex A", "Klausul 8-10"]],
     [3, "PDCA dapat diterapkan:", ["Hanya pada QMS secara keseluruhan", "Hanya pada proses produksi", "Pada setiap proses maupun QMS secara keseluruhan", "Hanya pada improvement"]],
     [4, "Manakah yang bukan merupakan prinsip manajemen mutu?", ["Customer focus", "Leadership", "Process approach", "Risk elimination"]],
     [5, "Mengapa process approach penting dalam QMS?", ["Agar organisasi mempunyai banyak SOP", "Agar proses dipahami sebagai aktivitas yang saling terkait dan menghasilkan intended result", "Agar auditor lebih mudah melakukan audit", "Agar seluruh proses memiliki format yang sama"]],
@@ -33,7 +33,7 @@ window.EXAM = {
     [12, "Struktur klausul ISO 9001:2026 sebaiknya dipahami sebagai:", ["Struktur manual mutu wajib", "Model dokumentasi organisasi", "Penyajian persyaratan secara koheren, bukan model dokumentasi organisasi", "Nama wajib untuk setiap proses"]],
     [13, "Perbedaan appropriate dan applicable yang paling tepat adalah:", ["Keduanya sama", "Appropriate berarti cocok/sesuai; applicable berarti relevan/dapat diterapkan", "Appropriate selalu wajib; applicable opsional", "Applicable hanya digunakan auditor"]],
     [14, "Perbedaan “consider” dan “take into account” adalah:", ["Tidak ada perbedaan", "Consider harus diterapkan; take into account boleh dikecualikan", "Consider perlu dipikirkan tetapi dapat dikecualikan; take into account perlu dipikirkan dan tidak dapat dikecualikan", "Keduanya hanya untuk climate change"]],
-    [15, "Annex A terutama berfungsi untuk:", ["Menambahkan persyaratan baru", "Memberikan informasi dan klarifikasi terhadap persyaratan", "Menggantikan Klausul 4–10", "Menentukan metode audit wajib"]],
+    [15, "Annex A terutama berfungsi untuk:", ["Menambahkan persyaratan baru", "Memberikan informasi dan klarifikasi terhadap persyaratan", "Menggantikan Klausul 4-10", "Menentukan metode audit wajib"]],
     [16, "Organisasi harus menentukan isu:", ["Internal saja", "External saja", "Internal dan external yang relevan", "Hanya yang diminta auditor"]],
     [17, "External dan internal issues harus relevan dengan:", ["Purpose dan strategic direction organisasi", "Keinginan auditor", "Jumlah karyawan", "Struktur organisasi saja"]],
     [18, "Salah satu penekanan penting dalam draft 2026 adalah organisasi harus menentukan apakah:", ["AI wajib digunakan", "Climate change merupakan isu yang relevan", "Sustainability wajib menjadi quality objective", "Semua organisasi wajib memiliki EMS"]],

@@ -2,12 +2,12 @@
 // Bank dipilih per batch (settings.bank); peserta menyimpan jawaban dengan answers.v = versi bank.
 (() => {
 const B = {};
-const finish = b => {
+const index = b => {
   b.items = b.sections.flatMap((s, i) => s.items.map(it => Object.assign(it, { sec: i })));
   b.item = {}; b.items.forEach(it => b.item[it.n] = it);
   b.total = b.items.length;
-  B[b.version] = b;
 };
+const finish = b => { index(b); B[b.version] = b; };
 
 const A = window.EXAM;                    // 100 soal pilihan ganda, dinilai otomatis
 finish({
@@ -29,7 +29,7 @@ if (M) finish({
       items: M.mc.map(([n, q, o]) => ({ n, kind: "mc", q, o })) },
     { name: "True / False + Reasoning", short: "B · Benar/Salah", part: "B", intro: "Tentukan Benar atau Salah, lalu tuliskan alasan Anda.",
       items: M.tf.map(([n, q]) => ({ n, kind: "tf", q })) },
-    ...M.cases.map((c, i) => ({ name: `Case ${i + 1} — ${c.title}`, short: `C${i + 1} · ${c.title}`, part: "C", scenario: c.scenario,
+    ...M.cases.map((c, i) => ({ name: `Case ${i + 1} - ${c.title}`, short: `C${i + 1} · ${c.title}`, part: "C", scenario: c.scenario,
       intro: "Yang dinilai adalah ketepatan reasoning dan penerapan, bukan redaksi baku.",
       items: c.qs.map(([n, q]) => ({ n, kind: "essay", q })) })),
     { name: M.integrated.title, short: "D · Kasus terpadu", part: "D", scenario: M.integrated.scenario,
@@ -70,7 +70,7 @@ if (K) {
             ? { n: ++n, kind: "short", part: p, ref, q: "Klausul " + ref, ph: "Judul klausul" }
             : { n: ++n, kind: "short", part: p, ref, q: K.titles[ref] || "?", sub: K.hint[ref] ? "bagian dari: " + K.hint[ref] : "", ph: "Nomor klausul", num: true });
           const pg = pages > 1 ? ` (${i / PAGE + 1}/${pages})` : "";
-          secs.push({ name: PART[p].name + pg, short: `Jenis ${p} · ${items[0].n}–${items[items.length - 1].n}`, part: p, intro: PART[p].intro, items });
+          secs.push({ name: PART[p].name + pg, short: `Jenis ${p} · ${items[0].n}-${items[items.length - 1].n}`, part: p, intro: PART[p].intro, items });
         }
       });
     }
@@ -84,14 +84,14 @@ if (K) {
   B[base.version] = base;
 }
 // Penilaian hafalan klausul (sama persis dengan fungsi public.clause_ok di database; cf = kunci bank klausul dari grading_config):
-// jenis 2 — semua angka di jawaban diambil dengan regex lalu digabung titik ("Klausul 7.1.4.", "7,1,4", "7 1 4" → "7.1.4"), harus sama persis;
+// jenis 2 - semua angka di jawaban diambil dengan regex lalu digabung titik ("Klausul 7.1.4.", "7,1,4", "7 1 4" → "7.1.4"), harus sama persis;
 // jenis 1, berurutan:
 //   1) judul dinormalisasi (huruf kecil, tanpa tanda baca, "&" = "dan"); benar bila sama atau jarak edit ≤ 15% panjangnya
-//      terhadap judul Indonesia (cf.t1) maupun Inggris (cf.e1) — kecuali jawabannya persis judul klausul lain;
+//      terhadap judul Indonesia (cf.t1) maupun Inggris (cf.e1) - kecuali jawabannya persis judul klausul lain;
 //   2) akhiran "-nya" dibuang, regex padanan kata (cf.rx.syn: kata Indonesia/Inggris/singkatan → kata baku), kata sambung (cf.rx.stop) dibuang, lalu kata kunci
 //      jawaban dibandingkan dengan kata kunci judul (cf.kw, dihitung database dengan rx yang sama); per kata masih menoleransi salah ketik.
 //      Benar bila semua kata kunci cocok tanpa kata lain; atau ≥ 2/3 kata kunci cocok tanpa kata lain / semua cocok dengan sedikit kata lain
-//      (judul ≥ 5 kata kunci) — kecuali jawabannya persis judul klausul lain (mis. "Audit Internal" untuk 9.2.2 Program Audit Internal).
+//      (judul ≥ 5 kata kunci) - kecuali jawabannya persis judul klausul lain (mis. "Audit Internal" untuk 9.2.2 Program Audit Internal).
 // Trainer tetap dapat mengoreksi per soal (Anggap benar / Anggap salah).
 const normT = s => String(s || "").slice(0, 200).toLowerCase().replace(/&/g, " dan ").replace(/[^a-z0-9]+/g, " ").trim();
 const normN = s => (String(s || "").slice(0, 100).match(/\d{1,9}/g) || []).map(Number).join(".");
@@ -164,6 +164,44 @@ if (I) finish({
     intro: "Jawablah setiap pertanyaan berdasarkan kasus berikut. Yang dinilai adalah ketepatan pemahaman dan penerapan, bukan redaksi baku.",
     items: c.qs.map(([n, q]) => ({ n, kind: "essay", q })) })),
 });
+
+// ---- bank soal dari database (tabel question_banks, dikelola di halaman "Bank Soal" admin) ----
+// pattern "builtin": menimpa teks bank bawaan (struktur & nomor soal sama); "pg" | "mix" | "essay": bank buatan admin
+// yang mengikuti pola bank 100 soal, bank 50 soal campuran, atau bank esai studi kasus (Training IMS).
+const clone = x => JSON.parse(JSON.stringify(x));
+const ORIG = {};
+Object.values(B).forEach(b => { if (!b.make) ORIG[b.version] = clone({ label: b.label, short: b.short, desc: b.desc, minutes: b.minutes, codes: b.codes, sections: b.sections.map(s => Object.assign({}, s, { items: s.items.map(it => { const x = Object.assign({}, it); delete x.sec; return x; }) })) }); });
+const PL = "ABCDEFGHIJKLMNOPQRSTUVWXYZ";
+const PATTERN = {
+  pg: { name: "Pilihan ganda", like: "seperti bank 100 soal" },
+  mix: { name: "Campuran", like: "seperti bank 50 soal campuran" },
+  essay: { name: "Esai studi kasus", like: "seperti bank Training IMS" },
+};
+const cleanSec = (s, part) => ({ name: String(s.name || ""), short: String(s.short || s.name || ""), code: s.code || undefined, part, intro: s.intro || "", scenario: s.scenario || "",
+  items: (s.items || []).map(it => ({ n: +it.n, kind: it.kind, q: String(it.q || ""), o: it.kind === "mc" ? (it.o || []).map(String) : undefined, label: it.label || undefined })) });
+window.registerBanks = list => {
+  Object.keys(B).forEach(v => { if (B[v].custom) delete B[v]; });
+  Object.entries(ORIG).forEach(([v, o]) => { const b = B[v]; if (!b) return; Object.assign(b, clone(o)); b.override = false; index(b); });
+  (list || []).forEach(r => {
+    const c = r.content || {}, secs = c.sections || [];
+    if (r.pattern === "builtin") {
+      const b = B[r.version]; if (!b || b.make || !ORIG[r.version]) return;
+      if (secs.length !== b.sections.length) return;                 // struktur bawaan tidak berubah; isi yang tidak cocok diabaikan
+      b.sections = secs.map((s, i) => cleanSec(s, b.sections[i].part));
+      Object.assign(b, { label: r.label || b.label, short: r.short || b.short, desc: r.descr || b.desc, minutes: r.minutes || b.minutes, override: true });
+      if (c.codes) b.codes = Object.assign({}, b.codes, c.codes);
+      index(b); return;
+    }
+    const P = r.pattern;
+    const sections = secs.map((s, i) => cleanSec(s, P === "mix" ? PL[i] : P === "essay" ? String(i + 1) : undefined));
+    const b = { version: r.version, key: "custom", custom: true, pattern: P, archived: r.active === false, minutes: r.minutes || 90,
+      manual: P !== "pg", essay: P === "essay", label: r.label, short: r.short || r.label, codes: c.codes || {}, sections, rawDesc: r.descr || "",
+      desc: r.descr || `${PATTERN[P] ? PATTERN[P].name : "Bank"} buatan admin, ${PATTERN[P] ? PATTERN[P].like : ""}.` };
+    if (P !== "pg") b.parts = Object.fromEntries(sections.map(s => [s.part, { name: s.name }]));
+    finish(b);
+  });
+};
+window.BANK_PATTERN = PATTERN;
 
 window.BANKS = B;
 window.BANK_DEFAULT = A.version;

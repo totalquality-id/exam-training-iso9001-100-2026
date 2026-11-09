@@ -126,7 +126,7 @@ insert into public.grading_config (id, config) values (2, $cfg${
   {
    "id": "C1",
    "sec": "C",
-   "label": "Case 1 — Climate Change & Context",
+   "label": "Case 1 - Climate Change & Context",
    "max": 4,
    "crit": [
     "Relevance/reasoning (1)",
@@ -142,7 +142,7 @@ insert into public.grading_config (id, config) values (2, $cfg${
   {
    "id": "C2",
    "sec": "C",
-   "label": "Case 2 — Quality Culture & Ethical Behaviour",
+   "label": "Case 2 - Quality Culture & Ethical Behaviour",
    "max": 4,
    "crit": [
     "Problem identification (1)",
@@ -158,7 +158,7 @@ insert into public.grading_config (id, config) values (2, $cfg${
   {
    "id": "C3",
    "sec": "C",
-   "label": "Case 3 — Organizational Knowledge",
+   "label": "Case 3 - Organizational Knowledge",
    "max": 4,
    "crit": [
     "Knowledge risk (1)",
@@ -174,7 +174,7 @@ insert into public.grading_config (id, config) values (2, $cfg${
   {
    "id": "C4",
    "sec": "C",
-   "label": "Case 4 — Digitalization & Risk",
+   "label": "Case 4 - Digitalization & Risk",
    "max": 4,
    "crit": [
     "Opportunity analysis (1)",
@@ -190,7 +190,7 @@ insert into public.grading_config (id, config) values (2, $cfg${
   {
    "id": "C5",
    "sec": "C",
-   "label": "Case 5 — Performance Evaluation",
+   "label": "Case 5 - Performance Evaluation",
    "max": 4,
    "crit": [
     "Rejects premature conclusion (1)",
@@ -206,7 +206,7 @@ insert into public.grading_config (id, config) values (2, $cfg${
   {
    "id": "D41",
    "sec": "D",
-   "label": "No. 41 — Context",
+   "label": "No. 41 - Context",
    "max": 2,
    "crit": "≥3 issues relevan dan linkage ke QMS",
    "qs": [
@@ -216,7 +216,7 @@ insert into public.grading_config (id, config) values (2, $cfg${
   {
    "id": "D42",
    "sec": "D",
-   "label": "No. 42 — Interested Parties",
+   "label": "No. 42 - Interested Parties",
    "max": 2,
    "crit": "≥4 parties + relevant requirements",
    "qs": [
@@ -226,7 +226,7 @@ insert into public.grading_config (id, config) values (2, $cfg${
   {
    "id": "D43",
    "sec": "D",
-   "label": "No. 43 — Climate Change",
+   "label": "No. 43 - Climate Change",
    "max": 2,
    "crit": "Decision + reasoning + QMS linkage",
    "qs": [
@@ -236,7 +236,7 @@ insert into public.grading_config (id, config) values (2, $cfg${
   {
    "id": "D44",
    "sec": "D",
-   "label": "No. 44 — Risk & Opportunity",
+   "label": "No. 44 - Risk & Opportunity",
    "max": 3,
    "crit": "Risk, opportunity, process linkage dan action",
    "qs": [
@@ -246,7 +246,7 @@ insert into public.grading_config (id, config) values (2, $cfg${
   {
    "id": "D45",
    "sec": "D",
-   "label": "No. 45 — Quality Culture & Ethics",
+   "label": "No. 45 - Quality Culture & Ethics",
    "max": 2,
    "crit": "Culture/behaviour gap + ethical issue",
    "qs": [
@@ -256,7 +256,7 @@ insert into public.grading_config (id, config) values (2, $cfg${
   {
    "id": "D46",
    "sec": "D",
-   "label": "No. 46 — Organizational Knowledge",
+   "label": "No. 46 - Organizational Knowledge",
    "max": 2,
    "crit": "Knowledge risk + action/transfer",
    "qs": [
@@ -266,7 +266,7 @@ insert into public.grading_config (id, config) values (2, $cfg${
   {
    "id": "D47",
    "sec": "D",
-   "label": "No. 47 — Digitalization",
+   "label": "No. 47 - Digitalization",
    "max": 2,
    "crit": "Technology risk + control/effectiveness",
    "qs": [
@@ -276,7 +276,7 @@ insert into public.grading_config (id, config) values (2, $cfg${
   {
    "id": "D48",
    "sec": "D",
-   "label": "No. 48 — Performance",
+   "label": "No. 48 - Performance",
    "max": 2,
    "crit": "KPI relevan + purpose/measurement",
    "qs": [
@@ -286,7 +286,7 @@ insert into public.grading_config (id, config) values (2, $cfg${
   {
    "id": "D49",
    "sec": "D",
-   "label": "No. 49 — Improvement",
+   "label": "No. 49 - Improvement",
    "max": 3,
    "crit": "Priority action jelas, owner/target bila ada",
    "qs": [

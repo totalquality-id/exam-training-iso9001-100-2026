@@ -30,6 +30,7 @@ const RULES = {
 
 let sb, CFGS = {}, rows = [], batches = [], coparts = [], trainings = [], cur = null, poll, bf = "all", fsv = "all", hasSettings = true, hasTraining = true, editId = null, an = { sort: "no", area: "all", bank: null };
 let route = { p: "list", id: null }, listY = 0, gradeT;
+let lf = { bank: "all", cop: "all" };                 // filter tambahan halaman Peserta: jenis soal (versi bank) & Copart
 
 async function init() {
   if (!CFG.SUPABASE_URL || CFG.SUPABASE_URL.startsWith("GANTI")) { view("vLogin"); $("#lErr").textContent = "Isi assets/config.js terlebih dahulu."; return; }
@@ -65,6 +66,10 @@ $("#fb").onchange = e => setBf(e.target.value);
 window.searchSelect($("#fb"), { placeholder: "Cari Copart, training, batch, atau kode", minWidth: 340 });
 window.searchSelect($("#bnTrn"), { placeholder: "Cari training atau Copart", empty: "Pilih training" });
 window.searchSelect($("#bnBank"), { placeholder: "Cari bank soal" });
+window.searchSelect($("#fBank"), { placeholder: "Cari jenis soal", minWidth: 280 });
+window.searchSelect($("#fCop"), { placeholder: "Cari Copart", minWidth: 280 });
+$("#fBank").onchange = e => { lf.bank = e.target.value; navCounts(); renderList(); };
+$("#fCop").onchange = e => { lf.cop = e.target.value; navCounts(); renderList(); };
 
 // ---- navigasi berbasis URL: #/peserta, #/peserta/<id>, #/training, #/training/<id copart>, #/analisis (+ ?batch=<filter>) ----
 // Tombol Back/Forward browser, refresh, dan tautan langsung ke halaman/peserta tetap berfungsi.
@@ -106,7 +111,8 @@ function navCounts() {
   $("#nList").innerHTML = base.length ? base.length + (live ? ` <i title="${live} sedang mengerjakan">${live} aktif</i>` : "") + (todo ? ` <i title="${todo} menunggu penilaian manual">${todo} perlu dinilai</i>` : "") : "";
   $("#nBatch").textContent = hasTraining ? trainings.length || "" : batches.length || "";
   const b = bOf(bf), ctx = b ? `${bPath(b)} · kode ${b.code} · ${bankOfBatch(b).short}` : fLabel(bf);
-  $("#ctxList").textContent = ctx + " · diperbarui otomatis";
+  lfCounts();
+  $("#ctxList").textContent = [ctx, ...lfLabels()].join(" · ") + " · diperbarui otomatis";
   $("#ctxAnal").textContent = ctx + " · dari peserta yang sudah mengirim jawaban";
 }
 // pintasan keyboard: / cari, Esc kembali ke daftar, ← → peserta sebelumnya/berikutnya
@@ -142,7 +148,29 @@ function fLabel(v) {
   const b = bOf(v); return b ? bPath(b) : "";
 }
 const batchRows = () => { if (bf === "all") return rows; if (bf === "none") return rows.filter(r => !r.batch_id); const s = fIds(bf); return s ? rows.filter(r => s.has(r.batch_id)) : rows.filter(r => r.batch_id === bf); };
-const setXlsLabel = () => $("#bXls").textContent = bf === "all" ? "Ekspor Excel" : "Ekspor Excel (filter ini)";
+const setXlsLabel = () => $("#bXls").textContent = bf === "all" && lf.bank === "all" && lf.cop === "all" ? "Ekspor Excel" : "Ekspor Excel (filter ini)";
+// Filter halaman Peserta (di dalam filter batch sidebar): jenis soal = bank soal peserta, Copart = nama Copart peserta
+const bankKey = r => (bankOfA(r) || B100).version;
+const copKey = r => pKey(r.copart) || "~";
+const listRows = () => batchRows().filter(r => (lf.bank === "all" || bankKey(r) === lf.bank) && (lf.cop === "all" || copKey(r) === lf.cop));
+const copName = k => { const r = rows.find(x => copKey(x) === k); return k === "~" ? "Tanpa Copart" : r ? r.copart.trim().replace(/\s+/g, " ") : k; };
+const lfLabels = () => [lf.bank !== "all" && BANKS[lf.bank] ? BANKS[lf.bank].label : "", lf.cop !== "all" ? copName(lf.cop) : ""].filter(Boolean);
+function lfCounts() {                                 // jumlah peserta per jenis soal & Copart di filter batch saat ini; pilihan yang sudah tidak ada dikembalikan ke "Semua"
+  const base = batchRows(), nb = {}, nc = {};
+  base.forEach(r => { nb[bankKey(r)] = (nb[bankKey(r)] || 0) + 1; nc[copKey(r)] = (nc[copKey(r)] || 0) + 1; });
+  if (lf.bank !== "all" && !nb[lf.bank]) lf.bank = "all";
+  if (lf.cop !== "all" && !nc[lf.cop]) lf.cop = "all";
+  return { base, nb, nc };
+}
+function renderListFilters() {
+  const { base, nb, nc } = lfCounts();
+  const opt = (v, t) => `<option value="${esc(v)}">${esc(t)}</option>`;
+  const hb = opt("all", `Semua jenis soal (${base.length})`) + Object.values(BANKS).filter(b => nb[b.version]).map(b => opt(b.version, `${b.label} (${nb[b.version]})`)).join("");
+  const hc = opt("all", `Semua Copart (${base.length})`) + Object.keys(nc).sort((x, y) => copName(x).localeCompare(copName(y), "id")).map(k => opt(k, `${copName(k)} (${nc[k]})`)).join("");
+  const set = (sel, h, v) => { if (sel.innerHTML !== h) sel.innerHTML = h; if (sel.value !== v) sel.value = v; };
+  set($("#fBank"), hb, lf.bank); set($("#fCop"), hc, lf.cop);
+  setXlsLabel();
+}
 const pubUrl = code => new URL("./?kode=" + code, location.href).href;
 const copy = async (t, btn) => {
   try { await navigator.clipboard.writeText(t); } catch { prompt("Salin teks berikut:", t); return; }
@@ -268,7 +296,8 @@ const stat = (label, value, sub, hl) => `<div class="stat${hl ? " hl" : ""}"><sp
 
 // ---- daftar peserta ----
 function renderList() {
-  const base = batchRows(), fin = base.filter(isFinal), cs = fin.map(a => calc(a)), todo = base.filter(needsGrading).length;
+  renderListFilters();
+  const base = listRows(), fin = base.filter(isFinal), cs = fin.map(a => calc(a)), todo = base.filter(needsGrading).length;
   const avg = cs.length ? (cs.reduce((t, c) => t + c.total, 0) / cs.length).toFixed(1) : "—", top = cs.length ? Math.max(...cs.map(c => c.total)) : null;
   const passN = cs.filter(c => c.pass).length, prog = base.filter(r => r.status === "in_progress").length, sub = base.filter(scored).length;
   const failN = cs.length - passN, remN = base.filter(r => r.remedial || r.status === "remedial").length, waitN = base.filter(r => r.status === "remedial").length;
@@ -305,7 +334,7 @@ function filtered() {
   const q = $("#qs").value.toLowerCase(), so = $("#sort").value;
   const st = r => fsv === "all" || (fsv === "done" ? scored(r) : fsv === "grade" ? needsGrading(r) : fsv === "fail" ? failed(r)
     : fsv === "rem" ? !!r.remedial || r.status === "remedial" : r.status === fsv);
-  let list = batchRows().filter(r => st(r) && (r.name + " " + r.job_title + " " + (r.copart || "")).toLowerCase().includes(q));
+  let list = listRows().filter(r => st(r) && (r.name + " " + r.job_title + " " + (r.copart || "")).toLowerCase().includes(q));
   const sc = r => isFinal(r) ? calc(r).total : -1;
   if (so === "score") list = [...list].sort((a, b) => sc(b) - sc(a));
   if (so === "low") list = [...list].sort((a, b) => (sc(a) < 0 ? 999 : sc(a)) - (sc(b) < 0 ? 999 : sc(b)));
@@ -1335,7 +1364,7 @@ function exportEssay(wb, bk, items, sfx) {          // bank esai (Training IMS):
 }
 async function exportXlsx() {
   const wb = new ExcelJS.Workbook(); wb.creator = "Total Quality Training Exam"; wb.created = new Date();
-  const list = [...batchRows()].reverse(), groups = {};
+  const list = [...listRows()].reverse(), groups = {};
   list.forEach(a => { const v = (bankOfA(a) || B100).version; (groups[v] = groups[v] || []).push(a); });
   const multi = Object.keys(groups).length > 1;
   for (const [ver, items] of Object.entries(groups)) {
@@ -1380,7 +1409,7 @@ async function exportXlsx() {
     ["G", "H"].forEach(col => w1.getColumn(col).numFmt = "dd/mm/yyyy hh:mm");
   }
   const buf = await wb.xlsx.writeBuffer(), url = URL.createObjectURL(new Blob([buf], { type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" }));
-  const el = document.createElement("a"); el.href = url; const bn = bf === "all" ? "" : fLabel(bf), slug = bn ? "_" + bn.replace(/[^A-Za-z0-9]+/g, "_").replace(/^_|_$/g, "") : "";
+  const el = document.createElement("a"); el.href = url; const bn = [bf === "all" ? "" : fLabel(bf), ...lfLabels().map(t => t.split(" (")[0])].filter(Boolean).join(" "), slug = bn ? "_" + bn.replace(/[^A-Za-z0-9]+/g, "_").replace(/^_|_$/g, "") : "";
   el.download = "Hasil_Training_Exam" + slug + "_" + new Date().toISOString().slice(0, 10) + ".xlsx"; el.click(); URL.revokeObjectURL(url);
 }
 init();

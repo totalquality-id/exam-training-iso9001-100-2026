@@ -76,9 +76,9 @@ window.searchSelect($("#fb"), { placeholder: "Cari Copart, training, batch, atau
 window.searchSelect($("#bnTrn"), { placeholder: "Cari training atau Copart", empty: "Pilih training" });
 window.searchSelect($("#bnBank"), { placeholder: "Cari bank soal" });
 window.searchSelect($("#fBank"), { placeholder: "Cari jenis soal", minWidth: 280 });
-window.searchSelect($("#fCop"), { placeholder: "Cari Copart", minWidth: 280 });
+window.searchSelect($("#fltCop"), { placeholder: "Cari Copart", minWidth: 280 });
 $("#fBank").onchange = e => { lf.bank = e.target.value; navCounts(); renderList(); };
-$("#fCop").onchange = e => { lf.cop = e.target.value; navCounts(); renderList(); };
+$("#fltCop").onchange = e => { lf.cop = e.target.value; navCounts(); renderList(); };
 
 // ---- navigasi berbasis URL: #/peserta, #/peserta/<id>, #/training, #/training/<id copart>, #/analisis (+ ?batch=<filter>) ----
 // Tombol Back/Forward browser, refresh, dan tautan langsung ke halaman/peserta tetap berfungsi.
@@ -181,7 +181,7 @@ function renderListFilters() {
   const hb = opt("all", `Semua jenis soal (${base.length})`) + Object.values(BANKS).filter(b => nb[b.version]).map(b => opt(b.version, `${b.label} (${nb[b.version]})`)).join("");
   const hc = opt("all", `Semua Copart (${base.length})`) + Object.keys(nc).sort((x, y) => copName(x).localeCompare(copName(y), "id")).map(k => opt(k, `${copName(k)} (${nc[k]})`)).join("");
   const set = (sel, h, v) => { if (sel.innerHTML !== h) sel.innerHTML = h; if (sel.value !== v) sel.value = v; };
-  set($("#fBank"), hb, lf.bank); set($("#fCop"), hc, lf.cop);
+  set($("#fBank"), hb, lf.bank); set($("#fltCop"), hc, lf.cop);
   setXlsLabel();
 }
 const pubUrl = code => new URL("./?kode=" + code, location.href).href;
